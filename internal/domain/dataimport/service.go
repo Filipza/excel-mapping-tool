@@ -26,6 +26,14 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 		}
 	}
 
+	if ud.UploadType == "" {
+		return nil, &Error{
+			ErrTitle: "Fehlender Uploadtyp",
+			ErrMsg:   "Uploadtyp wurde nicht ausgewählt",
+		}
+	}
+
+	// TODO: anpassen
 	ddOptions := make(map[string]string)
 	ddOptions["wkz"] = "Webekostenzuschuss"
 	ddOptions["stocks"] = "Lagerbestand"
@@ -67,7 +75,7 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 		if len(col) == 0 {
 			log.Debug(errors.New("first row is empty"))
 			return nil, &Error{
-				ErrTitle: "Dateifehler",
+				ErrTitle: "Leerzeile",
 				ErrMsg:   "Die erste Zeile der Datei ist leer. Diese muss für den Import die Tabellenköpfe enthalten.",
 			}
 		}
