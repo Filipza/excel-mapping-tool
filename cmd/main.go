@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"os"
 
 	"github.com/Filipza/excel-mapping-tool/internal/domain/dataimport"
@@ -10,6 +11,7 @@ import (
 )
 
 func main() {
+	log.SetLevel(log.DebugLevel)
 
 	file := loadFile("./test/test.xlsx")
 	defer file.Close()
@@ -80,6 +82,14 @@ func ReadFile(uploadData dataimport.UploadData) (*dataimport.MappingOptions, err
 			}
 		}
 
+		if i == 0 {
+			mappingOptions.TableHeaders = col
+			continue
+		}
+
+		mappingOptions.TableSummary = append(mappingOptions.TableSummary, col)
+
 	}
+	fmt.Println(mappingOptions)
 	return &mappingOptions, nil
 }
