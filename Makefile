@@ -16,4 +16,4 @@ test: tidy
 
 .PHONY: cover
 cover: test
-	$(GOTOOL) cover -html=cover.out
+	$(GOTOOL) cover -html=cover.out -o coverage.html
