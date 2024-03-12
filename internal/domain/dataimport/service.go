@@ -2,7 +2,6 @@ package dataimport
 
 import (
 	"errors"
-	"fmt"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/xuri/excelize/v2"
@@ -17,6 +16,8 @@ type mappingService struct {
 }
 
 func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
+	log.SetLevel(log.DebugLevel)
+
 	xlsx, err := excelize.OpenReader(ud.UploadedFile)
 	if err != nil {
 		log.Debug(err)
@@ -88,6 +89,5 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 		mappingOptions.TableSummary = append(mappingOptions.TableSummary, col)
 
 	}
-	fmt.Println(mappingOptions)
 	return &mappingOptions, nil
 }

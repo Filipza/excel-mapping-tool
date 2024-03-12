@@ -23,15 +23,15 @@ func TestReadFilePositive(t *testing.T) {
 
 	result, err := svc.ReadFile(mockUploadData)
 
-	assert.NotNil(t, result, "Result should not be nil")
-	assert.NoError(t, err, "ReadFile should not return an error")
-	assert.NotEmpty(t, result, "Result should not be empty")
+	assert.NotNil(t, result, "result should not be nil")
+	assert.NoError(t, err, "readFile should not return an error")
+	assert.NotEmpty(t, result, "result should not be empty")
 }
 
 func TestReadFileNegative(t *testing.T) {
 	xlsx, err := os.ReadFile("../../../test/corrupted.xlsx")
 	if err != nil {
-		t.Fatalf("Loading test .xlsx failed: %v", err)
+		t.Fatalf("loading test .xlsx failed: %v", err)
 	}
 
 	mockUploadData := &UploadData{
@@ -43,7 +43,7 @@ func TestReadFileNegative(t *testing.T) {
 
 	_, err = svc.ReadFile(mockUploadData)
 
-	assert.Error(t, err, "Corrupt file was correctly denied")
+	assert.Error(t, err, "corrupt file was correctly denied")
 }
 
 func TestReadFileEmpty(t *testing.T) {
@@ -58,7 +58,7 @@ func TestReadFileEmpty(t *testing.T) {
 
 	_, err := svc.ReadFile(mockUploadData)
 
-	assert.Error(t, err, "Empty file should be rejected")
+	assert.Error(t, err, "empty file should be rejected")
 
 	if customErr, ok := err.(*Error); ok {
 		assert.Equal(t, "Parsingfehler", customErr.ErrTitle)
@@ -68,7 +68,7 @@ func TestReadFileEmpty(t *testing.T) {
 func TestReadFileEmptyHeaders(t *testing.T) {
 	xlsx, err := os.ReadFile("../../../test/empty_headers.xlsx")
 	if err != nil {
-		t.Fatalf("Loading test .xlsx failed: %v", err)
+		t.Fatalf("loading test .xlsx failed: %v", err)
 	}
 
 	mockUploadData := &UploadData{
@@ -88,9 +88,9 @@ func TestReadFileEmptyHeaders(t *testing.T) {
 }
 
 func TestReadFileNoUploadType(t *testing.T) {
-	xlsx, err := os.ReadFile("../../../test/corrupted.xlsx")
+	xlsx, err := os.ReadFile("../../../test/positive.xlsx")
 	if err != nil {
-		t.Fatalf("Loading test .xlsx failed: %v", err)
+		t.Fatalf("loading test .xlsx failed: %v", err)
 	}
 
 	mockUploadData := &UploadData{
@@ -102,5 +102,5 @@ func TestReadFileNoUploadType(t *testing.T) {
 
 	_, err = svc.ReadFile(mockUploadData)
 
-	assert.Error(t, err, "Corrupt file was correctly denied")
+	assert.Error(t, err, "no upload type given")
 }
