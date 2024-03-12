@@ -9,10 +9,52 @@ import (
 
 type MappingService interface {
 	ReadFile(UploadData) (MappingOptions, error)
-	WriteMapping(MappingInstruction) (MappingResult, error)
+	WriteMapping(MappingInstruction) (MappingResult, error) // kann ich hier nicht direkt den custom Error type nutzen oder spricht was dagegen?
 }
 
 type mappingService struct {
+}
+
+type AllMappingOptions struct {
+	TariffMappingOptions   map[string]string
+	HardwareMappingOptions map[string]string
+	StockMappingOptions    map[string]string
+}
+
+var TariffMappingOptions = map[string]string{
+	"monatsPreis":           "Preis monatlich",
+	"monatsPreisNachAktion": "Preis monatlich nach Aktionszeitraum",
+	"leadType":              "Lead Type",
+	"marktPraemie":          "Marktprämie",
+	"onlinePraemie":         "Onlineprämie",
+	"anschlussGebEur":       "Anschlussgebühr in Euro",
+	"inklDataVolGb":         "Inkl. Datenvolumen in GB",
+	"legalNote":             "Legalnote",
+	"highlight1":            "Highlight 1",
+	"highlight2":            "Highlight 2",
+	"highlight3":            "Highlight 3",
+	"highlight4":            "Highlight 4",
+	"highlight5":            "Highlight 5",
+	"pibUrl":                "Pib-URL",
+	"anschlussPreis":        "Anschlusspreis",
+	"monatsGrundPreis":      "Monatsgrundpreis",
+	"inklBenefit1":          "Inklusiv-Benefit 1",
+	"inklBenefit2":          "Inklusiv-Benefit 2",
+	"inklBenefit3":          "Inklusiv-Benefit 3",
+	"inklBenefit4":          "Inklusiv-Benefit 4",
+	"inklBenefit5":          "Inklusiv-Benefit 5",
+	"wkz":                   "WKZ",
+}
+
+var HardwareMappingOptions = map[string]string{
+	"ek":          "EK",
+	"manufactWkz": "Manufacturer WKZ",
+	"ek24Wkz":     "ek24 WKZ",
+}
+
+var StockMappingOptions = map[string]string{
+	"currentStock":  "Stock aktuell",
+	"originalStock": "Stock original",
 }
 
 func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
@@ -90,4 +132,8 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 
 	}
 	return &mappingOptions, nil
+}
+
+func (svg *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult, error) {
+
 }
