@@ -18,48 +18,46 @@ type mappingService struct {
 }
 
 // TODO: map[string]map[string]string
-// TODO: englische Keys
-// TODO: var names uppercase snake case
 var (
-	TariffDropdownOptions = map[string]string{
-		"monatsPreis":           "Preis monatlich",
-		"monatsPreisNachAktion": "Preis monatlich nach Aktionszeitraum",
-		"leadType":              "Lead Type",
-		"marktPraemie":          "Marktprämie",
-		"onlinePraemie":         "Onlineprämie",
-		"anschlussGebEur":       "Anschlussgebühr in Euro",
-		"inklDataVolGb":         "Inkl. Datenvolumen in GB",
-		"legalNote":             "Legalnote",
-		"highlight1":            "Highlight 1",
-		"highlight2":            "Highlight 2",
-		"highlight3":            "Highlight 3",
-		"highlight4":            "Highlight 4",
-		"highlight5":            "Highlight 5",
-		"pibUrl":                "Pib-URL",
-		"anschlussPreis":        "Anschlusspreis",
-		"monatsGrundPreis":      "Monatsgrundpreis",
-		"inklBenefit1":          "Inklusiv-Benefit 1",
-		"inklBenefit2":          "Inklusiv-Benefit 2",
-		"inklBenefit3":          "Inklusiv-Benefit 3",
-		"inklBenefit4":          "Inklusiv-Benefit 4",
-		"inklBenefit5":          "Inklusiv-Benefit 5",
-		"wkz":                   "WKZ",
+	TARIFF_DROPDOWN_OPTIONS = map[string]string{
+		"monthlyPrice":               "Preis monatlich",
+		"monthlyPriceAfterPromotion": "Preis monatlich nach Aktionszeitraum",
+		"leadType":                   "Lead Type",
+		"storeBonus":                 "Marktprämie",
+		"onlineBonus":                "Onlineprämie",
+		"connectionFeeEur":           "Anschlussgebühr in Euro",
+		"inclDataVolumeGb":           "Inkl. Datenvolumen in GB",
+		"legalNote":                  "Legalnote",
+		"highlight1":                 "Highlight 1",
+		"highlight2":                 "Highlight 2",
+		"highlight3":                 "Highlight 3",
+		"highlight4":                 "Highlight 4",
+		"highlight5":                 "Highlight 5",
+		"pibUrl":                     "Pib-URL",
+		"connectionFee":              "Anschlusspreis",
+		"monthlyBasePrice":           "Monatsgrundpreis",
+		"inclBenefit1":               "Inklusiv-Benefit 1",
+		"inclBenefit2":               "Inklusiv-Benefit 2",
+		"inclBenefit3":               "Inklusiv-Benefit 3",
+		"inclBenefit4":               "Inklusiv-Benefit 4",
+		"inclBenefit5":               "Inklusiv-Benefit 5",
+		"wkz":                        "WKZ",
 	}
 
-	HardwareDropdownOptions = map[string]string{
+	HARDWARE_DROPDOWN_OPTIONS = map[string]string{
 		"ek":          "EK",
 		"manufactWkz": "Manufacturer WKZ",
 		"ek24Wkz":     "ek24 WKZ",
 	}
 
-	StockDropdownOptions = map[string]string{
+	STOCKS_DROPDOWN_OPTIONS = map[string]string{
 		"currentStock":  "Stock aktuell",
 		"originalStock": "Stock original",
 	}
 )
 
 // ? Wird wird die UUID bei jeder Kommunikation mit-/zurückgegeben?
-func (svc *mappingService) ReadFile(ud *UploadData, uuid uuid.UUID) (*MappingOptions, error) {
+func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 	xlsx, err := excelize.OpenReader(ud.UploadedFile)
 	if err != nil {
 		log.Debug(err)
@@ -75,13 +73,12 @@ func (svc *mappingService) ReadFile(ud *UploadData, uuid uuid.UUID) (*MappingOpt
 
 	switch ud.UploadType {
 	case "tariff":
-		mappingOptions.DropdownOptions = TariffDropdownOptions
+		mappingOptions.DropdownOptions = TARIFF_DROPDOWN_OPTIONS
 	case "hardware":
-		mappingOptions.DropdownOptions = HardwareDropdownOptions
+		mappingOptions.DropdownOptions = HARDWARE_DROPDOWN_OPTIONS
 	case "stocks":
-		mappingOptions.DropdownOptions = StockDropdownOptions
+		mappingOptions.DropdownOptions = STOCKS_DROPDOWN_OPTIONS
 	default:
-		//TODO: Test schreiben
 		return nil, &Error{
 			ErrTitle: "Fehlender/falscher Uploadtyp",
 			ErrMsg:   fmt.Sprintf("Der Uploadtype %s ist unbekannt", ud.UploadType),

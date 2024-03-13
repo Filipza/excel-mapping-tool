@@ -16,7 +16,7 @@ func TestReadFilePositive(t *testing.T) {
 
 	mockUploadData := &UploadData{
 		UploadedFile: bytes.NewReader(xlsx),
-		UploadType:   "wkz",
+		UploadType:   "stocks",
 	}
 
 	svc := mappingService{}
@@ -36,7 +36,7 @@ func TestReadFileNegative(t *testing.T) {
 
 	mockUploadData := &UploadData{
 		UploadedFile: bytes.NewReader(xlsx),
-		UploadType:   "wkz",
+		UploadType:   "stocks",
 	}
 
 	svc := mappingService{}
@@ -51,7 +51,7 @@ func TestReadFileEmpty(t *testing.T) {
 
 	mockUploadData := &UploadData{
 		UploadedFile: emptyFile,
-		UploadType:   "wkz",
+		UploadType:   "stocks",
 	}
 
 	svc := mappingService{}
@@ -73,7 +73,7 @@ func TestReadFileEmptyHeaders(t *testing.T) {
 
 	mockUploadData := &UploadData{
 		UploadedFile: bytes.NewReader(xlsx),
-		UploadType:   "wkz",
+		UploadType:   "stocks",
 	}
 
 	svc := mappingService{}
@@ -127,4 +127,13 @@ func TestReadFileUploadType(t *testing.T) {
 	}
 }
 
-// TODO: Custom Error testen
+func TestCustomError(t *testing.T) {
+	customErr := Error{
+		ErrTitle: "custom error title",
+		ErrMsg:   "custom error message",
+	}
+
+	errorMsg := customErr.Error()
+
+	assert.Equal(t, errorMsg, "Error: custom error message")
+}
