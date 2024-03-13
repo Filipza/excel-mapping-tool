@@ -125,5 +125,6 @@ func TestReadFileUploadType(t *testing.T) {
 
 		assert.NoError(t, err, "function should no return an error")
 	}
-
 }
+
+// TODO: Custom Error testen

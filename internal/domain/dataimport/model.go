@@ -27,6 +27,26 @@ type MappingObject struct {
 	MappingValue string
 }
 
+// {
+// 	"mapping": [
+// 	  {"index": 1, "mappingValue": "value1"},
+// 	  {"index": 2, "mappingValue": "value2"},
+// 	  {"index": 3, "mappingValue": "value3"}
+// 	]
+// }
+
+type MappingInstructionV2 struct {
+	MappingV2 map[int]string
+}
+
+// {
+// 	"mappingV2": {
+// 	  "1": "value1",
+// 	  "2": "value2",
+// 	  "3": "value3"
+// 	}
+// }
+
 type MappingResult struct {
 	SuccessfulRows   int
 	UnsuccessfulRows int

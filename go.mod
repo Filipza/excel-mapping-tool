@@ -3,6 +3,7 @@ module github.com/Filipza/excel-mapping-tool
 go 1.22.0
 
 require (
+	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.9.0
 	github.com/xuri/excelize/v2 v2.8.1
 )

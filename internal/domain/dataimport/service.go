@@ -2,7 +2,9 @@ package dataimport
 
 import (
 	"errors"
+	"fmt"
 
+	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/xuri/excelize/v2"
 )
@@ -15,43 +17,49 @@ type MappingService interface {
 type mappingService struct {
 }
 
-var TariffDropdownOptions = map[string]string{
-	"monatsPreis":           "Preis monatlich",
-	"monatsPreisNachAktion": "Preis monatlich nach Aktionszeitraum",
-	"leadType":              "Lead Type",
-	"marktPraemie":          "Marktprämie",
-	"onlinePraemie":         "Onlineprämie",
-	"anschlussGebEur":       "Anschlussgebühr in Euro",
-	"inklDataVolGb":         "Inkl. Datenvolumen in GB",
-	"legalNote":             "Legalnote",
-	"highlight1":            "Highlight 1",
-	"highlight2":            "Highlight 2",
-	"highlight3":            "Highlight 3",
-	"highlight4":            "Highlight 4",
-	"highlight5":            "Highlight 5",
-	"pibUrl":                "Pib-URL",
-	"anschlussPreis":        "Anschlusspreis",
-	"monatsGrundPreis":      "Monatsgrundpreis",
-	"inklBenefit1":          "Inklusiv-Benefit 1",
-	"inklBenefit2":          "Inklusiv-Benefit 2",
-	"inklBenefit3":          "Inklusiv-Benefit 3",
-	"inklBenefit4":          "Inklusiv-Benefit 4",
-	"inklBenefit5":          "Inklusiv-Benefit 5",
-	"wkz":                   "WKZ",
-}
+// TODO: map[string]map[string]string
+// TODO: englische Keys
+// TODO: var names uppercase snake case
+var (
+	TariffDropdownOptions = map[string]string{
+		"monatsPreis":           "Preis monatlich",
+		"monatsPreisNachAktion": "Preis monatlich nach Aktionszeitraum",
+		"leadType":              "Lead Type",
+		"marktPraemie":          "Marktprämie",
+		"onlinePraemie":         "Onlineprämie",
+		"anschlussGebEur":       "Anschlussgebühr in Euro",
+		"inklDataVolGb":         "Inkl. Datenvolumen in GB",
+		"legalNote":             "Legalnote",
+		"highlight1":            "Highlight 1",
+		"highlight2":            "Highlight 2",
+		"highlight3":            "Highlight 3",
+		"highlight4":            "Highlight 4",
+		"highlight5":            "Highlight 5",
+		"pibUrl":                "Pib-URL",
+		"anschlussPreis":        "Anschlusspreis",
+		"monatsGrundPreis":      "Monatsgrundpreis",
+		"inklBenefit1":          "Inklusiv-Benefit 1",
+		"inklBenefit2":          "Inklusiv-Benefit 2",
+		"inklBenefit3":          "Inklusiv-Benefit 3",
+		"inklBenefit4":          "Inklusiv-Benefit 4",
+		"inklBenefit5":          "Inklusiv-Benefit 5",
+		"wkz":                   "WKZ",
+	}
 
-var HardwareDropdownOptions = map[string]string{
-	"ek":          "EK",
-	"manufactWkz": "Manufacturer WKZ",
-	"ek24Wkz":     "ek24 WKZ",
-}
+	HardwareDropdownOptions = map[string]string{
+		"ek":          "EK",
+		"manufactWkz": "Manufacturer WKZ",
+		"ek24Wkz":     "ek24 WKZ",
+	}
 
-var StockDropdownOptions = map[string]string{
-	"currentStock":  "Stock aktuell",
-	"originalStock": "Stock original",
-}
+	StockDropdownOptions = map[string]string{
+		"currentStock":  "Stock aktuell",
+		"originalStock": "Stock original",
+	}
+)
 
-func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
+// ? Wird wird die UUID bei jeder Kommunikation mit-/zurückgegeben?
+func (svc *mappingService) ReadFile(ud *UploadData, uuid uuid.UUID) (*MappingOptions, error) {
 	xlsx, err := excelize.OpenReader(ud.UploadedFile)
 	if err != nil {
 		log.Debug(err)
@@ -61,15 +69,23 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 		}
 	}
 
-	if ud.UploadType == "" {
-		return nil, &Error{
-			ErrTitle: "Fehlender Uploadtyp",
-			ErrMsg:   "Uploadtyp wurde nicht ausgewählt",
-		}
-	}
-
 	mappingOptions := MappingOptions{
 		TableSummary: make([][]string, 0),
+	}
+
+	switch ud.UploadType {
+	case "tariff":
+		mappingOptions.DropdownOptions = TariffDropdownOptions
+	case "hardware":
+		mappingOptions.DropdownOptions = HardwareDropdownOptions
+	case "stocks":
+		mappingOptions.DropdownOptions = StockDropdownOptions
+	default:
+		//TODO: Test schreiben
+		return nil, &Error{
+			ErrTitle: "Fehlender/falscher Uploadtyp",
+			ErrMsg:   fmt.Sprintf("Der Uploadtype %s ist unbekannt", ud.UploadType),
+		}
 	}
 
 	sheetLists := xlsx.GetSheetList()
@@ -117,19 +133,10 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 		mappingOptions.TableSummary = append(mappingOptions.TableSummary, col)
 	}
 
-	// Set dropdown options
-	switch ud.UploadType {
-	case "tariff":
-		mappingOptions.DropdownOptions = TariffDropdownOptions
-	case "hardware":
-		mappingOptions.DropdownOptions = HardwareDropdownOptions
-	case "stocks":
-		mappingOptions.DropdownOptions = StockDropdownOptions
-	}
-
 	return &mappingOptions, nil
 }
 
-// func (svg *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult, error) {
+func (svg *mappingService) WriteMapping(mi *MappingInstruction, uuid uuid.UUID) (*MappingResult, error) {
 
-// }
+	return nil, nil
+}
