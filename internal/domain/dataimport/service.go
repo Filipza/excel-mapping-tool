@@ -15,13 +15,7 @@ type MappingService interface {
 type mappingService struct {
 }
 
-type AllMappingOptions struct {
-	TariffMappingOptions   map[string]string
-	HardwareMappingOptions map[string]string
-	StockMappingOptions    map[string]string
-}
-
-var TariffMappingOptions = map[string]string{
+var TariffDropdownOptions = map[string]string{
 	"monatsPreis":           "Preis monatlich",
 	"monatsPreisNachAktion": "Preis monatlich nach Aktionszeitraum",
 	"leadType":              "Lead Type",
@@ -46,20 +40,18 @@ var TariffMappingOptions = map[string]string{
 	"wkz":                   "WKZ",
 }
 
-var HardwareMappingOptions = map[string]string{
+var HardwareDropdownOptions = map[string]string{
 	"ek":          "EK",
 	"manufactWkz": "Manufacturer WKZ",
 	"ek24Wkz":     "ek24 WKZ",
 }
 
-var StockMappingOptions = map[string]string{
+var StockDropdownOptions = map[string]string{
 	"currentStock":  "Stock aktuell",
 	"originalStock": "Stock original",
 }
 
 func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
-	log.SetLevel(log.DebugLevel)
-
 	xlsx, err := excelize.OpenReader(ud.UploadedFile)
 	if err != nil {
 		log.Debug(err)
@@ -76,14 +68,8 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 		}
 	}
 
-	// TODO: anpassen
-	ddOptions := make(map[string]string)
-	ddOptions["wkz"] = "Webekostenzuschuss"
-	ddOptions["stocks"] = "Lagerbestand"
-
 	mappingOptions := MappingOptions{
-		DropdownOptions: ddOptions,
-		TableSummary:    make([][]string, 0),
+		TableSummary: make([][]string, 0),
 	}
 
 	sheetLists := xlsx.GetSheetList()
@@ -129,11 +115,21 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 		}
 
 		mappingOptions.TableSummary = append(mappingOptions.TableSummary, col)
-
 	}
+
+	// Set dropdown options
+	switch ud.UploadType {
+	case "tariff":
+		mappingOptions.DropdownOptions = TariffDropdownOptions
+	case "hardware":
+		mappingOptions.DropdownOptions = HardwareDropdownOptions
+	case "stocks":
+		mappingOptions.DropdownOptions = StockDropdownOptions
+	}
+
 	return &mappingOptions, nil
 }
 
-func (svg *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult, error) {
+// func (svg *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult, error) {
 
-}
+// }

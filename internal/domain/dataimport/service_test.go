@@ -24,7 +24,7 @@ func TestReadFilePositive(t *testing.T) {
 	result, err := svc.ReadFile(mockUploadData)
 
 	assert.NotNil(t, result, "result should not be nil")
-	assert.NoError(t, err, "readFile should not return an error")
+	assert.NoError(t, err, "function should not return an error")
 	assert.NotEmpty(t, result, "result should not be empty")
 }
 
@@ -103,4 +103,27 @@ func TestReadFileNoUploadType(t *testing.T) {
 	_, err = svc.ReadFile(mockUploadData)
 
 	assert.Error(t, err, "no upload type given")
+}
+
+func TestReadFileUploadType(t *testing.T) {
+	xlsx, err := os.ReadFile("../../../test/positive.xlsx")
+	if err != nil {
+		t.Fatalf("loading test .xlsx failed: %v", err)
+	}
+
+	uploadTypes := []string{"tariff", "hardware", "stocks"}
+
+	for _, v := range uploadTypes {
+		mockUploadData := &UploadData{
+			UploadedFile: bytes.NewReader(xlsx),
+			UploadType:   v,
+		}
+
+		svc := mappingService{}
+
+		_, err = svc.ReadFile(mockUploadData)
+
+		assert.NoError(t, err, "function should no return an error")
+	}
+
 }
