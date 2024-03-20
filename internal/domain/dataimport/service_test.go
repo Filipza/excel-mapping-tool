@@ -126,6 +126,23 @@ func TestReadFileUploadType(t *testing.T) {
 		assert.NoError(t, err, "function should no return an error")
 	}
 }
+func TestReadFileUnknownUploadType(t *testing.T) {
+	xlsx, err := os.ReadFile("../../../test/positive.xlsx")
+	if err != nil {
+		t.Fatalf("loading test .xlsx failed: %v", err)
+	}
+
+	mockUploadData := &UploadData{
+		UploadedFile: bytes.NewReader(xlsx),
+		UploadType:   "bananen",
+	}
+
+	svc := mappingService{}
+
+	_, err = svc.ReadFile(mockUploadData)
+
+	assert.Error(t, err, "UploadData should contain valid uploadType")
+}
 
 func TestCustomError(t *testing.T) {
 	customErr := Error{

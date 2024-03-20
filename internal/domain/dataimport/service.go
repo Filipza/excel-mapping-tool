@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/xuri/excelize/v2"
 )
@@ -17,9 +16,8 @@ type MappingService interface {
 type mappingService struct {
 }
 
-// TODO: map[string]map[string]string
-var (
-	TARIFF_DROPDOWN_OPTIONS = map[string]string{
+var DROPDOWN_OPTIONS = map[string]map[string]string{
+	"tariff": {
 		"monthlyPrice":               "Preis monatlich",
 		"monthlyPriceAfterPromotion": "Preis monatlich nach Aktionszeitraum",
 		"leadType":                   "Lead Type",
@@ -42,22 +40,22 @@ var (
 		"inclBenefit4":               "Inklusiv-Benefit 4",
 		"inclBenefit5":               "Inklusiv-Benefit 5",
 		"wkz":                        "WKZ",
-	}
-
-	HARDWARE_DROPDOWN_OPTIONS = map[string]string{
+	},
+	"hardware": {
 		"ek":          "EK",
 		"manufactWkz": "Manufacturer WKZ",
 		"ek24Wkz":     "ek24 WKZ",
-	}
-
-	STOCKS_DROPDOWN_OPTIONS = map[string]string{
+	},
+	"stocks": {
 		"currentStock":  "Stock aktuell",
 		"originalStock": "Stock original",
-	}
-)
+	},
+}
 
 // ? Wird wird die UUID bei jeder Kommunikation mit-/zurückgegeben?
+// co context.Context
 func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
+
 	xlsx, err := excelize.OpenReader(ud.UploadedFile)
 	if err != nil {
 		log.Debug(err)
@@ -71,14 +69,9 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 		TableSummary: make([][]string, 0),
 	}
 
-	switch ud.UploadType {
-	case "tariff":
-		mappingOptions.DropdownOptions = TARIFF_DROPDOWN_OPTIONS
-	case "hardware":
-		mappingOptions.DropdownOptions = HARDWARE_DROPDOWN_OPTIONS
-	case "stocks":
-		mappingOptions.DropdownOptions = STOCKS_DROPDOWN_OPTIONS
-	default:
+	var exists bool
+	mappingOptions.DropdownOptions, exists = DROPDOWN_OPTIONS[ud.UploadType]
+	if !exists {
 		return nil, &Error{
 			ErrTitle: "Fehlender/falscher Uploadtyp",
 			ErrMsg:   fmt.Sprintf("Der Uploadtype %s ist unbekannt", ud.UploadType),
@@ -133,7 +126,7 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 	return &mappingOptions, nil
 }
 
-func (svg *mappingService) WriteMapping(mi *MappingInstruction, uuid uuid.UUID) (*MappingResult, error) {
+func (svg *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult, error) {
 
 	return nil, nil
 }
