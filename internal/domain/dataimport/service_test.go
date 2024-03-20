@@ -154,3 +154,7 @@ func TestCustomError(t *testing.T) {
 
 	assert.Equal(t, errorMsg, "Error: custom error message")
 }
+
+// func TestRemoveFiles(t *testing.T) {
+// 	os.RemoveAll("../files/")
+// }

@@ -3,7 +3,10 @@ package dataimport
 import (
 	"errors"
 	"fmt"
+	"os"
+	"time"
 
+	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/xuri/excelize/v2"
 )
@@ -14,6 +17,7 @@ type MappingService interface {
 }
 
 type mappingService struct {
+	// syncmap
 }
 
 var DROPDOWN_OPTIONS = map[string]map[string]string{
@@ -52,9 +56,28 @@ var DROPDOWN_OPTIONS = map[string]map[string]string{
 	},
 }
 
-// ? Wird wird die UUID bei jeder Kommunikation mit-/zurückgegeben?
-// co context.Context
 func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
+	if ud.Uuid == "" {
+		ud.Uuid = uuid.New().String()
+	}
+
+	// creation of dir named after uuid
+	dirPath := "../files/" + ud.Uuid + "/"
+
+	err := os.MkdirAll(dirPath, 0755)
+	if err != nil {
+		return nil, &Error{
+			ErrTitle: "Verzeichnisfehler",
+			ErrMsg:   "Verzeichnis konnte nicht erstellt werden",
+		}
+	}
+
+	// removal of dir after timeout
+	// TODO: Create channel as entrypoint for WriteMapping() to kill goroutine
+	go func(dirPath string) {
+		time.Sleep(1800 * time.Second)
+		os.RemoveAll(dirPath)
+	}(dirPath)
 
 	xlsx, err := excelize.OpenReader(ud.UploadedFile)
 	if err != nil {
@@ -63,6 +86,10 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 			ErrTitle: "Parsingfehler",
 			ErrMsg:   "Datei konnte nicht verarbeitet werden und möglicherweise korrupt.",
 		}
+	}
+
+	if err := xlsx.SaveAs(dirPath + "data.xlsx"); err != nil {
+		fmt.Println(err)
 	}
 
 	mappingOptions := MappingOptions{

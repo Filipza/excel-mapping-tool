@@ -9,6 +9,7 @@ import (
 type UploadData struct {
 	UploadedFile io.Reader
 	UploadType   string
+	Uuid         string
 }
 
 type MappingOptions struct {
