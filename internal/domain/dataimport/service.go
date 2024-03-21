@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,7 +18,7 @@ type MappingService interface {
 }
 
 type mappingService struct {
-	// syncmap
+	chanMap sync.Map
 }
 
 var DROPDOWN_OPTIONS = map[string]map[string]string{
@@ -74,6 +75,9 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 
 	// removal of dir after timeout
 	// TODO: Create channel as entrypoint for WriteMapping() to kill goroutine
+	rfch := make(chan int)
+	svc.chanMap.Store(ud.Uuid, rfch)
+
 	go func(dirPath string) {
 		time.Sleep(1800 * time.Second)
 		os.RemoveAll(dirPath)
