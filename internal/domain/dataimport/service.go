@@ -74,14 +74,32 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 	}
 
 	// removal of dir after timeout
-	// TODO: Create channel as entrypoint for WriteMapping() to kill goroutine
-	rfch := make(chan int)
-	svc.chanMap.Store(ud.Uuid, rfch)
+	cleanupCh := make(chan bool)
+	svc.chanMap.Store(ud.Uuid, cleanupCh)
 
-	go func(dirPath string) {
-		time.Sleep(1800 * time.Second)
-		os.RemoveAll(dirPath)
-	}(dirPath)
+	go func(dirPath string, ch <-chan bool) {
+		timer := time.NewTimer(1800 * time.Second)
+
+		select {
+		case <-timer.C:
+			os.RemoveAll(dirPath)
+		case <-ch:
+			return
+		}
+	}(dirPath, cleanupCh)
+
+	// TODO: Test timer channel and find out if Stop() actually doesnt stop timer
+	// type mappingService struct {
+	// 	timerMap sync.Map
+	// }
+	// timer := time.NewTimer(1800 * time.Second)
+	//svc.timerMap.Store(ud.Uuid, timer.C)
+	// go func(dirPath string, ch <-chan time.Time) {
+	// 	<-timer.C
+
+	// 	os.RemoveAll(dirPath)
+	// }(dirPath, timer.C)
+	// timer.Stop()
 
 	xlsx, err := excelize.OpenReader(ud.UploadedFile)
 	if err != nil {
@@ -158,6 +176,5 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 }
 
 func (svg *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult, error) {
-
 	return nil, nil
 }
