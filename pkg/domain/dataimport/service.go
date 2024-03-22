@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Filipza/excel-mapping-tool/internal/domain/v1/crud"
+	"github.com/Filipza/excel-mapping-tool/internal/domain/v1/tariff"
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/xuri/excelize/v2"
@@ -18,7 +20,8 @@ type MappingService interface {
 }
 
 type mappingService struct {
-	chanMap sync.Map
+	chanMap       sync.Map
+	tariffAdapter crud.CRUDService[tariff.TariffCRUD, tariff.TariffLookup]
 }
 
 var DROPDOWN_OPTIONS = map[string]map[string]string{
@@ -73,6 +76,7 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 		}
 	}
 
+	// TODO: Write tests for goroutine/channels
 	// removal of dir after timeout
 	cleanupCh := make(chan bool)
 	svc.chanMap.Store(ud.Uuid, cleanupCh)
@@ -175,6 +179,8 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 	return &mappingOptions, nil
 }
 
-func (svg *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult, error) {
+func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult, error) {
+
+	svc.tariffAdapter.Read()
 	return nil, nil
 }
