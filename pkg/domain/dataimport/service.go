@@ -26,6 +26,7 @@ type mappingService struct {
 
 var DROPDOWN_OPTIONS = map[string]map[string]string{
 	"tariff": {
+		"EbootisId":                  "EbootisId",
 		"monthlyPrice":               "Preis monatlich",
 		"monthlyPriceAfterPromotion": "Preis monatlich nach Aktionszeitraum",
 		"leadType":                   "Lead Type",
@@ -50,13 +51,17 @@ var DROPDOWN_OPTIONS = map[string]map[string]string{
 		"wkz":                        "WKZ",
 	},
 	"hardware": {
-		"ek":          "EK",
-		"manufactWkz": "Manufacturer WKZ",
-		"ek24Wkz":     "ek24 WKZ",
+		"EbootisId":             "EbootisId",
+		"externalArticleNumber": "Exerterne Artikelnr.",
+		"ek":                    "EK",
+		"manufactWkz":           "Manufacturer WKZ",
+		"ek24Wkz":               "ek24 WKZ",
 	},
 	"stocks": {
-		"currentStock":  "Stock aktuell",
-		"originalStock": "Stock original",
+		"EbootisId":             "EbootisId",
+		"externalArticleNumber": "Exerterne Artikelnr.",
+		"currentStock":          "Stock aktuell",
+		"originalStock":         "Stock original",
 	},
 }
 
@@ -105,7 +110,7 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 	// }(dirPath, timer.C)
 	// timer.Stop()
 
-	xlsx, err := excelize.OpenReader(ud.UploadedFile)
+	file, err := excelize.OpenReader(ud.UploadedFile)
 	if err != nil {
 		log.Debug(err)
 		return nil, &Error{
@@ -113,9 +118,10 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 			ErrMsg:   "Datei konnte nicht verarbeitet werden und möglicherweise korrupt.",
 		}
 	}
+	defer file.Close()
 
-	if err := xlsx.SaveAs(dirPath + "data.xlsx"); err != nil {
-		fmt.Println(err)
+	if err := file.SaveAs(dirPath + "data.xlsx"); err != nil {
+		fmt.Println(err) // TODO
 	}
 
 	mappingOptions := MappingOptions{
@@ -131,7 +137,7 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 		}
 	}
 
-	sheetLists := xlsx.GetSheetList()
+	sheetLists := file.GetSheetList()
 	if len(sheetLists) == 0 {
 		log.Debug(err)
 		return nil, &Error{
@@ -140,7 +146,7 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 		}
 	}
 
-	rows, err := xlsx.Rows(sheetLists[0])
+	rows, err := file.Rows(sheetLists[0])
 	if err != nil {
 		log.Debug(err)
 		return nil, &Error{
@@ -150,7 +156,7 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 	}
 
 	for i := 0; i < 4 && rows.Next(); i++ {
-		col, err := rows.Columns()
+		cols, err := rows.Columns()
 
 		if err != nil {
 			log.Debug(err)
@@ -160,7 +166,7 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 			}
 		}
 
-		if len(col) == 0 {
+		if len(cols) == 0 {
 			log.Debug(errors.New("first row is empty"))
 			return nil, &Error{
 				ErrTitle: "Leerzeile",
@@ -169,11 +175,12 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 		}
 
 		if i == 0 {
-			mappingOptions.TableHeaders = col
+			mappingOptions.TableHeaders = cols
+			fmt.Println(cols)
 			continue
 		}
 
-		mappingOptions.TableSummary = append(mappingOptions.TableSummary, col)
+		mappingOptions.TableSummary = append(mappingOptions.TableSummary, cols)
 	}
 
 	return &mappingOptions, nil
@@ -181,6 +188,55 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 
 func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult, error) {
 
-	svc.tariffAdapter.Read()
+	exists, idIndex, idType := mi.GetIdentifierIndex()
+
+	if !exists {
+		return nil, &Error{
+			ErrTitle: "Fehlende EbootisID / externe Artikelnummer",
+			ErrMsg:   "Keine der Spalten wurde der EbootisID / exeternen Artikelnummer zugewiesen",
+		}
+	}
+
+	file, err := excelize.OpenFile("../files/" + mi.Uuid + "/")
+	if err != nil {
+		return nil, &Error{
+			ErrTitle: "Fehler beim Öffnen der Datei",
+			ErrMsg:   "Die zu bearbeitende Excel-Datei konnte nicht geöffnet werden",
+		}
+	}
+	defer file.Close()
+
+	sheetLists := file.GetSheetList()
+	if len(sheetLists) == 0 {
+		log.Debug(err)
+		return nil, &Error{
+			ErrTitle: "Fehlerhafte Excel-Datei",
+			ErrMsg:   "Datei enthält keine Arbeitsblätter",
+		}
+	}
+
+	rows, err := file.Rows(sheetLists[0])
+	if err != nil {
+		log.Debug(err)
+		return nil, &Error{
+			ErrTitle: "Parsingfehler",
+			ErrMsg:   "Es is ein Fehler beim Lesen der Reihen aufgetreten. Überprüfe die Datei.",
+		}
+	}
+
+	for i := 1; rows.Next(); i++ {
+
+	}
+
+	// tariffList := svc.tariffAdapter.List()
+	// if len(tariffList) > 1 {
+	// 	return nil, &Error{
+	// 		ErrTitle: "Multiple Einträge zu",
+	// 		ErrMsg:   "Keine der Spalten wurde der EbootisID / exeternen Artikelnummer zugewiesen",
+	// 	}
+	// }
+
+	// svc.tariffAdapter.List(settings.Option{Name: "ebootis_id", Value: "ebootiscellvalue"})
+
 	return nil, nil
 }

@@ -16,16 +16,32 @@ type MappingOptions struct {
 	DropdownOptions map[string]string
 	TableHeaders    []string
 	TableSummary    [][]string
+	Uuid            string
 }
 
 // Instructions sent to BE after mapping in FE
 type MappingInstruction struct {
 	Mapping []MappingObject
+	Uuid    string
 }
 
 type MappingObject struct {
 	Index        int
 	MappingValue string
+}
+
+func (mi *MappingInstruction) GetIdentifierIndex() (exists bool, index int, idType string) {
+	for i, m := range mi.Mapping {
+		switch m.MappingValue {
+		case "EbootisId":
+			return true, i, "EbootisId"
+		case "externalArticleNumber":
+			exists = true
+			index = i
+			idType = "externalArticleNumber"
+		}
+	}
+	return exists, index, idType
 }
 
 type MappingResult struct {

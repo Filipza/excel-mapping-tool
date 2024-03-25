@@ -155,6 +155,26 @@ func TestCustomError(t *testing.T) {
 	assert.Equal(t, errorMsg, "Error: custom error message")
 }
 
+// func TestAbortChannel(t *testing.T) {
+// 	xlsx, err := os.ReadFile("../../../test/positive.xlsx")
+// 	if err != nil {
+// 		t.Fatalf("Loading test .xlsx failed: %v", err)
+// 	}
+
+// 	mockUploadData := &UploadData{
+// 		UploadedFile: bytes.NewReader(xlsx),
+// 		UploadType:   "stocks",
+// 	}
+
+// 	svc := mappingService{}
+
+// 	result, err := svc.ReadFile(mockUploadData)
+
+// 	assert.NotNil(t, result, "result should not be nil")
+// 	assert.NoError(t, err, "function should not return an error")
+
+// }
+
 // func TestRemoveFiles(t *testing.T) {
 // 	os.RemoveAll("../files/")
 // }
