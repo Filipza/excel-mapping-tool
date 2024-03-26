@@ -120,8 +120,13 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 	}
 	defer file.Close()
 
-	if err := file.SaveAs(dirPath + "data.xlsx"); err != nil {
-		fmt.Println(err) // TODO
+	err = file.SaveAs(dirPath + "data.xlsx")
+	if err != nil {
+		log.Debug(err)
+		return nil, &Error{
+			ErrTitle: "Speicherfehler",
+			ErrMsg:   "Datei konnte nicht abespeichert werden.",
+		}
 	}
 
 	mappingOptions := MappingOptions{
@@ -176,7 +181,7 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 
 		if i == 0 {
 			mappingOptions.TableHeaders = cols
-			fmt.Println(cols)
+			// fmt.Println(cols)
 			continue
 		}
 
@@ -197,7 +202,7 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 		}
 	}
 
-	file, err := excelize.OpenFile("../files/" + mi.Uuid + "/")
+	file, err := excelize.OpenFile("../files/" + mi.Uuid + "/data.xlsx")
 	if err != nil {
 		return nil, &Error{
 			ErrTitle: "Fehler beim Öffnen der Datei",
@@ -224,9 +229,18 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 		}
 	}
 
-	for i := 1; rows.Next(); i++ {
-
+	col, err := rows.Columns()
+	if err != nil {
+		log.Debug(err)
+		return nil, &Error{
+			ErrTitle: "Parsingfehler",
+			ErrMsg:   "Es is ein Fehler beim Lesen der Reihen aufgetreten. Überprüfe die Datei.",
+		}
 	}
+
+	fmt.Println(idIndex)
+	fmt.Println(idType)
+	fmt.Println(col)
 
 	// tariffList := svc.tariffAdapter.List()
 	// if len(tariffList) > 1 {

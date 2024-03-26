@@ -3,19 +3,20 @@ package dataimport
 import (
 	"bytes"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestReadFilePositive(t *testing.T) {
-	xlsx, err := os.ReadFile("../../../test/positive.xlsx")
+	file, err := os.ReadFile("../../../test/positive.xlsx")
 	if err != nil {
 		t.Fatalf("Loading test .xlsx failed: %v", err)
 	}
 
 	mockUploadData := &UploadData{
-		UploadedFile: bytes.NewReader(xlsx),
+		UploadedFile: bytes.NewReader(file),
 		UploadType:   "stocks",
 	}
 
@@ -28,14 +29,53 @@ func TestReadFilePositive(t *testing.T) {
 	assert.NotEmpty(t, result, "result should not be empty")
 }
 
+func TestDirCreationPositive(t *testing.T) {
+	file, err := os.ReadFile("../../../test/positive.xlsx")
+	if err != nil {
+		t.Fatalf("Loading test .xlsx failed: %v", err)
+	}
+
+	mockUploadData := &UploadData{
+		UploadedFile: bytes.NewReader(file),
+		UploadType:   "stocks",
+		Uuid:         "3fc7522d-ed25-40df-9972-333ba8aea504",
+	}
+
+	svc := mappingService{}
+
+	_, err = svc.ReadFile(mockUploadData)
+
+	assert.NoError(t, err, "valid UUID should be accepted for directory creation")
+	assert.FileExists(t, "../files/"+mockUploadData.Uuid+"/data.xlsx")
+}
+
+func TestDirCreationNegative(t *testing.T) {
+	file, err := os.ReadFile("../../../test/positive.xlsx")
+	if err != nil {
+		t.Fatalf("Loading test .xlsx failed: %v", err)
+	}
+
+	mockUploadData := &UploadData{
+		UploadedFile: bytes.NewReader(file),
+		UploadType:   "stocks",
+		Uuid:         "longdirname" + strings.Repeat("a", 300),
+	}
+
+	svc := mappingService{}
+
+	_, err = svc.ReadFile(mockUploadData)
+
+	assert.Error(t, err, "invalid uuid should not be accepted")
+}
+
 func TestReadFileNegative(t *testing.T) {
-	xlsx, err := os.ReadFile("../../../test/corrupted.xlsx")
+	file, err := os.ReadFile("../../../test/corrupted.xlsx")
 	if err != nil {
 		t.Fatalf("loading test .xlsx failed: %v", err)
 	}
 
 	mockUploadData := &UploadData{
-		UploadedFile: bytes.NewReader(xlsx),
+		UploadedFile: bytes.NewReader(file),
 		UploadType:   "stocks",
 	}
 
@@ -66,13 +106,13 @@ func TestReadFileEmpty(t *testing.T) {
 }
 
 func TestReadFileEmptyHeaders(t *testing.T) {
-	xlsx, err := os.ReadFile("../../../test/empty_headers.xlsx")
+	file, err := os.ReadFile("../../../test/empty_headers.xlsx")
 	if err != nil {
 		t.Fatalf("loading test .xlsx failed: %v", err)
 	}
 
 	mockUploadData := &UploadData{
-		UploadedFile: bytes.NewReader(xlsx),
+		UploadedFile: bytes.NewReader(file),
 		UploadType:   "stocks",
 	}
 
@@ -88,13 +128,13 @@ func TestReadFileEmptyHeaders(t *testing.T) {
 }
 
 func TestReadFileNoUploadType(t *testing.T) {
-	xlsx, err := os.ReadFile("../../../test/positive.xlsx")
+	file, err := os.ReadFile("../../../test/positive.xlsx")
 	if err != nil {
 		t.Fatalf("loading test .xlsx failed: %v", err)
 	}
 
 	mockUploadData := &UploadData{
-		UploadedFile: bytes.NewReader(xlsx),
+		UploadedFile: bytes.NewReader(file),
 		UploadType:   "",
 	}
 
@@ -106,7 +146,7 @@ func TestReadFileNoUploadType(t *testing.T) {
 }
 
 func TestReadFileUploadType(t *testing.T) {
-	xlsx, err := os.ReadFile("../../../test/positive.xlsx")
+	file, err := os.ReadFile("../../../test/positive.xlsx")
 	if err != nil {
 		t.Fatalf("loading test .xlsx failed: %v", err)
 	}
@@ -115,7 +155,7 @@ func TestReadFileUploadType(t *testing.T) {
 
 	for _, v := range uploadTypes {
 		mockUploadData := &UploadData{
-			UploadedFile: bytes.NewReader(xlsx),
+			UploadedFile: bytes.NewReader(file),
 			UploadType:   v,
 		}
 
@@ -127,13 +167,13 @@ func TestReadFileUploadType(t *testing.T) {
 	}
 }
 func TestReadFileUnknownUploadType(t *testing.T) {
-	xlsx, err := os.ReadFile("../../../test/positive.xlsx")
+	file, err := os.ReadFile("../../../test/positive.xlsx")
 	if err != nil {
 		t.Fatalf("loading test .xlsx failed: %v", err)
 	}
 
 	mockUploadData := &UploadData{
-		UploadedFile: bytes.NewReader(xlsx),
+		UploadedFile: bytes.NewReader(file),
 		UploadType:   "bananen",
 	}
 
@@ -142,6 +182,81 @@ func TestReadFileUnknownUploadType(t *testing.T) {
 	_, err = svc.ReadFile(mockUploadData)
 
 	assert.Error(t, err, "UploadData should contain valid uploadType")
+}
+
+// func TestGetIdentifierIndexPositive(t *testing.T) {
+// 	file, err := os.ReadFile("../../../test/positive.xlsx")
+// 	if err != nil {
+// 		t.Fatalf("Loading test .xlsx failed: %v", err)
+// 	}
+
+// 	mockUploadData := &UploadData{
+// 		UploadedFile: bytes.NewReader(file),
+// 		UploadType:   "stocks",
+// 		Uuid:         "1a1133b1-65cf-46f6-a246-6049234d1149",
+// 	}
+
+// 	svc := mappingService{}
+
+// 	svc.ReadFile(mockUploadData)
+
+// 	mockMappingInstructions := &MappingInstruction{}
+
+// 	svc.WriteMapping(mockMappingInstructions)
+// }
+
+func TestGetEbootisIndexPositive(t *testing.T) {
+	mi := &MappingInstruction{
+		Uuid: "1e1133c1-65cf-46f6-a246-6049234d3447",
+		Mapping: []MappingObject{
+			{Index: 0, MappingValue: "externalArticleNumber"},
+			{Index: 1, MappingValue: "EbootisId"},
+			{Index: 2, MappingValue: "pibUrl"},
+			{Index: 3, MappingValue: "wkz"},
+		},
+	}
+
+	exists, idIndex, idtype := mi.GetIdentifierIndex()
+
+	assert.Equal(t, exists, true, "exists should equal true")
+	assert.Equal(t, idIndex, 1, "idIndex should equal 0")
+	assert.Equal(t, idtype, "EbootisId", "idtype should equal 'EbootisId'")
+}
+
+func TestGetExternalArticleNumberIndexPositive(t *testing.T) {
+	mi := &MappingInstruction{
+		Uuid: "2e1133c1-65cf-46f6-a246-6049234d3448",
+		Mapping: []MappingObject{
+			{Index: 0, MappingValue: "LeadType"},
+			{Index: 1, MappingValue: "externalArticleNumber"},
+			{Index: 2, MappingValue: "PibLink"},
+			{Index: 3, MappingValue: "Wkz"},
+		},
+	}
+
+	exists, idIndex, idtype := mi.GetIdentifierIndex()
+
+	assert.Equal(t, exists, true, "exists should equal true")
+	assert.Equal(t, idIndex, 1, "idIndex should equal 0")
+	assert.Equal(t, idtype, "externalArticleNumber", "idtype should equal 'externalArticleNumber'")
+}
+
+func TestGetExternalArticleNumberIndexNegative(t *testing.T) {
+	mi := &MappingInstruction{
+		Uuid: "3e1133c1-65cf-46f6-a246-6049234d3449",
+		Mapping: []MappingObject{
+			{Index: 0, MappingValue: "LeadType"},
+			{Index: 1, MappingValue: "Subsidy"},
+			{Index: 2, MappingValue: "PibLink"},
+			{Index: 3, MappingValue: "Wkz"},
+		},
+	}
+
+	exists, idIndex, idtype := mi.GetIdentifierIndex()
+
+	assert.Equal(t, exists, false, "exists should equal true")
+	assert.Equal(t, idIndex, 0, "idIndex should equal 0")
+	assert.Equal(t, idtype, "", "idtype should equal ''")
 }
 
 func TestCustomError(t *testing.T) {
@@ -155,24 +270,8 @@ func TestCustomError(t *testing.T) {
 	assert.Equal(t, errorMsg, "Error: custom error message")
 }
 
-// func TestAbortChannel(t *testing.T) {
-// 	xlsx, err := os.ReadFile("../../../test/positive.xlsx")
-// 	if err != nil {
-// 		t.Fatalf("Loading test .xlsx failed: %v", err)
-// 	}
-
-// 	mockUploadData := &UploadData{
-// 		UploadedFile: bytes.NewReader(xlsx),
-// 		UploadType:   "stocks",
-// 	}
-
-// 	svc := mappingService{}
-
-// 	result, err := svc.ReadFile(mockUploadData)
-
-// 	assert.NotNil(t, result, "result should not be nil")
-// 	assert.NoError(t, err, "function should not return an error")
-
+// func TestAbortDeletionChannel(t *testing.T) {
+// TODO
 // }
 
 // func TestRemoveFiles(t *testing.T) {
