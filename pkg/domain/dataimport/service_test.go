@@ -46,7 +46,7 @@ func TestDirCreationPositive(t *testing.T) {
 	_, err = svc.ReadFile(mockUploadData)
 
 	assert.NoError(t, err, "valid UUID should be accepted for directory creation")
-	assert.FileExists(t, "../files/"+mockUploadData.Uuid+"/data.xlsx")
+	assert.FileExists(t, "/tmp/"+mockUploadData.Uuid+"/data.xlsx")
 }
 
 func TestDirCreationNegative(t *testing.T) {
@@ -184,27 +184,6 @@ func TestReadFileUnknownUploadType(t *testing.T) {
 	assert.Error(t, err, "UploadData should contain valid uploadType")
 }
 
-// func TestGetIdentifierIndexPositive(t *testing.T) {
-// 	file, err := os.ReadFile("../../../test/positive.xlsx")
-// 	if err != nil {
-// 		t.Fatalf("Loading test .xlsx failed: %v", err)
-// 	}
-
-// 	mockUploadData := &UploadData{
-// 		UploadedFile: bytes.NewReader(file),
-// 		UploadType:   "stocks",
-// 		Uuid:         "1a1133b1-65cf-46f6-a246-6049234d1149",
-// 	}
-
-// 	svc := mappingService{}
-
-// 	svc.ReadFile(mockUploadData)
-
-// 	mockMappingInstructions := &MappingInstruction{}
-
-// 	svc.WriteMapping(mockMappingInstructions)
-// }
-
 func TestGetEbootisIndexPositive(t *testing.T) {
 	mi := &MappingInstruction{
 		Uuid: "1e1133c1-65cf-46f6-a246-6049234d3447",
@@ -241,7 +220,7 @@ func TestGetExternalArticleNumberIndexPositive(t *testing.T) {
 	assert.Equal(t, idtype, "externalArticleNumber", "idtype should equal 'externalArticleNumber'")
 }
 
-func TestGetExternalArticleNumberIndexNegative(t *testing.T) {
+func TestGetIdentifierIndexNegative(t *testing.T) {
 	mi := &MappingInstruction{
 		Uuid: "3e1133c1-65cf-46f6-a246-6049234d3449",
 		Mapping: []MappingObject{
@@ -259,6 +238,95 @@ func TestGetExternalArticleNumberIndexNegative(t *testing.T) {
 	assert.Equal(t, idtype, "", "idtype should equal ''")
 }
 
+func TestWriteMappingGetIdentifierNegative(t *testing.T) {
+
+	file, err := os.ReadFile("../../../test/positive.xlsx")
+	if err != nil {
+		t.Fatalf("Loading test .xlsx failed: %v", err)
+	}
+
+	mockUploadData := &UploadData{
+		UploadedFile: bytes.NewReader(file),
+		UploadType:   "stocks",
+	}
+
+	svc := mappingService{}
+
+	result, _ := svc.ReadFile(mockUploadData)
+
+	mi := &MappingInstruction{
+		Uuid: result.Uuid,
+		Mapping: []MappingObject{
+			{Index: 0, MappingValue: "pibUrl"},
+			{Index: 1, MappingValue: "wkz"},
+		},
+	}
+
+	_, err = svc.WriteMapping(mi)
+
+	assert.Error(t, err, "MappingInstruction should contain either 'EbootisID' or 'externalArticleNumber' as MappingValue")
+}
+
+// func TestWriteMappingOpenXlsxNegative(t *testing.T) {
+
+// 	// file, err := os.ReadFile("../../../test/positive.xlsx")
+// 	// if err != nil {
+// 	// 	t.Fatalf("Loading test .xlsx failed: %v", err)
+// 	// }
+
+// 	// mockUploadData := &UploadData{
+// 	// 	UploadedFile: bytes.NewReader(file),
+// 	// 	UploadType:   "stocks",
+// 	// }
+
+// 	svc := mappingService{}
+
+// 	// result, err := svc.ReadFile(mockUploadData)
+
+// 	mi := &MappingInstruction{
+// 		Uuid: "8cae326f-d3de-45d4-8bb8-ded181f44a0e",
+// 		Mapping: []MappingObject{
+// 			{Index: 0, MappingValue: "pibUrl"},
+// 			{Index: 1, MappingValue: "wkz"},
+// 		},
+// 	}
+
+// 	_, err := svc.WriteMapping(mi)
+
+// 	assert.NoError(t, err, "function should not return an error")
+// }
+
+func TestWriteMapping(t *testing.T) {
+
+	file, err := os.ReadFile("../../../test/positive.xlsx")
+	if err != nil {
+		t.Fatalf("Loading test .xlsx failed: %v", err)
+	}
+
+	mockUploadData := &UploadData{
+		UploadedFile: bytes.NewReader(file),
+		UploadType:   "stocks",
+	}
+
+	svc := mappingService{}
+
+	result, err := svc.ReadFile(mockUploadData)
+
+	mi := &MappingInstruction{
+		Uuid: result.Uuid,
+		Mapping: []MappingObject{
+			{Index: 0, MappingValue: "EbootisId"},
+			{Index: 1, MappingValue: "externalArticleNumber"},
+			{Index: 2, MappingValue: "pibUrl"},
+			{Index: 3, MappingValue: "wkz"},
+		},
+	}
+
+	svc.WriteMapping(mi)
+
+	assert.NoError(t, err, "function should not return an error")
+}
+
 func TestCustomError(t *testing.T) {
 	customErr := Error{
 		ErrTitle: "custom error title",
@@ -266,7 +334,6 @@ func TestCustomError(t *testing.T) {
 	}
 
 	errorMsg := customErr.Error()
-
 	assert.Equal(t, errorMsg, "Error: custom error message")
 }
 

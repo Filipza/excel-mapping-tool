@@ -58,5 +58,5 @@ func (mi *MappingInstruction) GetIdentifierIndex() (exists bool, idIndex int, id
 			idType = "externalArticleNumber"
 		}
 	}
-	return exists, idIndex, idType
+	return
 }

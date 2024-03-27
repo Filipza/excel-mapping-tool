@@ -71,7 +71,7 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 	}
 
 	// creation of dir named after uuid
-	dirPath := "../files/" + ud.Uuid + "/"
+	dirPath := "/tmp/" + ud.Uuid + "/"
 
 	err := os.MkdirAll(dirPath, 0755)
 	if err != nil {
@@ -131,6 +131,7 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 
 	mappingOptions := MappingOptions{
 		TableSummary: make([][]string, 0),
+		Uuid:         ud.Uuid,
 	}
 
 	var exists bool
@@ -193,16 +194,17 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 
 func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult, error) {
 
-	exists, idIndex, idType := mi.GetIdentifierIndex()
+	exists, idIndex, _ := mi.GetIdentifierIndex()
+	idCol := idIndex + 1
 
 	if !exists {
 		return nil, &Error{
 			ErrTitle: "Fehlende EbootisID / externe Artikelnummer",
-			ErrMsg:   "Keine der Spalten wurde der EbootisID / exeternen Artikelnummer zugewiesen",
+			ErrMsg:   "Keine der Spalten wurde der EbootisID / externen Artikelnummer zugewiesen",
 		}
 	}
 
-	file, err := excelize.OpenFile("../files/" + mi.Uuid + "/data.xlsx")
+	file, err := excelize.OpenFile("/tmp/" + mi.Uuid + "/data.xlsx")
 	if err != nil {
 		return nil, &Error{
 			ErrTitle: "Fehler beim Öffnen der Datei",
@@ -220,35 +222,27 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 		}
 	}
 
-	rows, err := file.Rows(sheetLists[0])
-	if err != nil {
-		log.Debug(err)
-		return nil, &Error{
-			ErrTitle: "Parsingfehler",
-			ErrMsg:   "Es is ein Fehler beim Lesen der Reihen aufgetreten. Überprüfe die Datei.",
-		}
+	sh := sheetLists[0]
+	rows, _ := file.Rows(sh)
+	rows.Next() // Iteration to first (header) row to read relevant colCount
+	cols, _ := rows.Columns()
+	colCount := len(cols)
+
+	rowCount := 0
+	for rows.Next() {
+		rowCount++
 	}
 
-	col, err := rows.Columns()
-	if err != nil {
-		log.Debug(err)
-		return nil, &Error{
-			ErrTitle: "Parsingfehler",
-			ErrMsg:   "Es is ein Fehler beim Lesen der Reihen aufgetreten. Überprüfe die Datei.",
+	for r := 2; r <= rowCount; r++ {
+		for c := 1; c <= colCount; c++ {
+			coords, _ := excelize.CoordinatesToCellName(c, r)
+			cellValue, _ := file.GetCellValue(sh, coords)
+
+			if c == idCol {
+				fmt.Println(cellValue)
+			}
 		}
 	}
-
-	fmt.Println(idIndex)
-	fmt.Println(idType)
-	fmt.Println(col)
-
-	// tariffList := svc.tariffAdapter.List()
-	// if len(tariffList) > 1 {
-	// 	return nil, &Error{
-	// 		ErrTitle: "Multiple Einträge zu",
-	// 		ErrMsg:   "Keine der Spalten wurde der EbootisID / exeternen Artikelnummer zugewiesen",
-	// 	}
-	// }
 
 	// svc.tariffAdapter.List(settings.Option{Name: "ebootis_id", Value: "ebootiscellvalue"})
 
