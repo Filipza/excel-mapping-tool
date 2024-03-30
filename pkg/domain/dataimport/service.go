@@ -9,6 +9,7 @@ import (
 
 	"github.com/Filipza/excel-mapping-tool/internal/domain/v1/crud"
 	"github.com/Filipza/excel-mapping-tool/internal/domain/v1/tariff"
+	"github.com/Filipza/excel-mapping-tool/internal/settings"
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/xuri/excelize/v2"
@@ -224,7 +225,7 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 
 	sh := sheetLists[0]
 	rows, _ := file.Rows(sh)
-	rows.Next() // Iteration to first (header) row to read relevant colCount
+	rows.Next() // Iteration to first (header) row to read relevant colCount.
 	cols, _ := rows.Columns()
 	colCount := len(cols)
 
@@ -234,17 +235,24 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 	}
 
 	for r := 2; r <= rowCount; r++ {
-		for c := 1; c <= colCount; c++ {
-			coords, _ := excelize.CoordinatesToCellName(c, r)
-			cellValue, _ := file.GetCellValue(sh, coords)
+		idCoords, _ := excelize.CoordinatesToCellName(idCol, r)
+		identifierValue, _ := file.GetCellValue(sh, idCoords)
 
+		listResult, _ := svc.tariffAdapter.List(settings.Option{Name: "ebootis_id", Value: identifierValue})
+		_, err := svc.tariffAdapter.Update(settings.Option{Name: "id", Value: listResult[0].Id})
+
+		// tariffObj := svc.tariffAdapter.Update()
+		// tariffObj := svc.tariffAdapter.List()
+
+		for c := 1; c <= colCount; c++ {
 			if c == idCol {
-				fmt.Println(cellValue)
+				continue
 			}
+
+			// coords, _ := excelize.CoordinatesToCellName(c, r)
+			// cellValue, _ := file.GetCellValue(sh, coords)
 		}
 	}
-
-	// svc.tariffAdapter.List(settings.Option{Name: "ebootis_id", Value: "ebootiscellvalue"})
 
 	return nil, nil
 }
