@@ -188,10 +188,10 @@ func TestGetEbootisIndexPositive(t *testing.T) {
 	mi := &MappingInstruction{
 		Uuid: "1e1133c1-65cf-46f6-a246-6049234d3447",
 		Mapping: []MappingObject{
-			{Index: 0, MappingValue: "externalArticleNumber"},
-			{Index: 1, MappingValue: "EbootisId"},
-			{Index: 2, MappingValue: "pibUrl"},
-			{Index: 3, MappingValue: "wkz"},
+			{ColIndex: 0, MappingValue: "externalArticleNumber"},
+			{ColIndex: 1, MappingValue: "EbootisId"},
+			{ColIndex: 2, MappingValue: "pibUrl"},
+			{ColIndex: 3, MappingValue: "wkz"},
 		},
 	}
 
@@ -206,10 +206,10 @@ func TestGetExternalArticleNumberIndexPositive(t *testing.T) {
 	mi := &MappingInstruction{
 		Uuid: "2e1133c1-65cf-46f6-a246-6049234d3448",
 		Mapping: []MappingObject{
-			{Index: 0, MappingValue: "LeadType"},
-			{Index: 1, MappingValue: "externalArticleNumber"},
-			{Index: 2, MappingValue: "PibLink"},
-			{Index: 3, MappingValue: "Wkz"},
+			{ColIndex: 0, MappingValue: "LeadType"},
+			{ColIndex: 1, MappingValue: "externalArticleNumber"},
+			{ColIndex: 2, MappingValue: "PibLink"},
+			{ColIndex: 3, MappingValue: "Wkz"},
 		},
 	}
 
@@ -224,10 +224,10 @@ func TestGetIdentifierIndexNegative(t *testing.T) {
 	mi := &MappingInstruction{
 		Uuid: "3e1133c1-65cf-46f6-a246-6049234d3449",
 		Mapping: []MappingObject{
-			{Index: 0, MappingValue: "LeadType"},
-			{Index: 1, MappingValue: "Subsidy"},
-			{Index: 2, MappingValue: "PibLink"},
-			{Index: 3, MappingValue: "Wkz"},
+			{ColIndex: 0, MappingValue: "LeadType"},
+			{ColIndex: 1, MappingValue: "Subsidy"},
+			{ColIndex: 2, MappingValue: "PibLink"},
+			{ColIndex: 3, MappingValue: "Wkz"},
 		},
 	}
 
@@ -257,8 +257,8 @@ func TestWriteMappingGetIdentifierNegative(t *testing.T) {
 	mi := &MappingInstruction{
 		Uuid: result.Uuid,
 		Mapping: []MappingObject{
-			{Index: 0, MappingValue: "pibUrl"},
-			{Index: 1, MappingValue: "wkz"},
+			{ColIndex: 0, MappingValue: "pibUrl"},
+			{ColIndex: 1, MappingValue: "wkz"},
 		},
 	}
 
@@ -315,10 +315,10 @@ func TestWriteMapping(t *testing.T) {
 	mi := &MappingInstruction{
 		Uuid: result.Uuid,
 		Mapping: []MappingObject{
-			{Index: 0, MappingValue: "EbootisId"},
-			{Index: 1, MappingValue: "externalArticleNumber"},
-			{Index: 2, MappingValue: "pibUrl"},
-			{Index: 3, MappingValue: "wkz"},
+			{ColIndex: 0, MappingValue: "EbootisId"},
+			{ColIndex: 1, MappingValue: "externalArticleNumber"},
+			{ColIndex: 2, MappingValue: "pibUrl"},
+			{ColIndex: 3, MappingValue: "wkz"},
 		},
 	}
 

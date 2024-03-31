@@ -26,7 +26,7 @@ type MappingInstruction struct {
 }
 
 type MappingObject struct {
-	Index        int
+	ColIndex     int
 	MappingValue string
 }
 

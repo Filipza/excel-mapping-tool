@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -28,20 +29,20 @@ type mappingService struct {
 var DROPDOWN_OPTIONS = map[string]map[string]string{
 	"tariff": {
 		"EbootisId":                  "EbootisId",
-		"monthlyPrice":               "Preis monatlich",
+		"BasicCharge":                "Preis monatlich",
 		"monthlyPriceAfterPromotion": "Preis monatlich nach Aktionszeitraum",
-		"leadType":                   "Lead Type",
+		"LeadType":                   "Lead Type",
 		"storeBonus":                 "Marktprämie",
 		"onlineBonus":                "Onlineprämie",
-		"connectionFeeEur":           "Anschlussgebühr in Euro",
-		"inclDataVolumeGb":           "Inkl. Datenvolumen in GB",
+		"ConnectionFee":              "Anschlussgebühr in Euro",
+		"DataVolume":                 "Inkl. Datenvolumen in GB",
 		"legalNote":                  "Legalnote",
 		"highlight1":                 "Highlight 1",
 		"highlight2":                 "Highlight 2",
 		"highlight3":                 "Highlight 3",
 		"highlight4":                 "Highlight 4",
 		"highlight5":                 "Highlight 5",
-		"pibUrl":                     "Pib-URL",
+		"PibLink":                    "Pib-URL",
 		"connectionFee":              "Anschlusspreis",
 		"monthlyBasePrice":           "Monatsgrundpreis",
 		"inclBenefit1":               "Inklusiv-Benefit 1",
@@ -49,7 +50,7 @@ var DROPDOWN_OPTIONS = map[string]map[string]string{
 		"inclBenefit3":               "Inklusiv-Benefit 3",
 		"inclBenefit4":               "Inklusiv-Benefit 4",
 		"inclBenefit5":               "Inklusiv-Benefit 5",
-		"wkz":                        "WKZ",
+		"Wkz":                        "WKZ",
 	},
 	"hardware": {
 		"EbootisId":             "EbootisId",
@@ -198,6 +199,8 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 	exists, idIndex, _ := mi.GetIdentifierIndex()
 	idCol := idIndex + 1
 
+	fmt.Println(idCol)
+
 	if !exists {
 		return nil, &Error{
 			ErrTitle: "Fehlende EbootisID / externe Artikelnummer",
@@ -226,33 +229,41 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 	sh := sheetLists[0]
 	rows, _ := file.Rows(sh)
 	rows.Next() // Iteration to first (header) row to read relevant colCount.
-	cols, _ := rows.Columns()
-	colCount := len(cols)
 
 	rowCount := 0
 	for rows.Next() {
 		rowCount++
 	}
 
-	for r := 2; r <= rowCount; r++ {
-		idCoords, _ := excelize.CoordinatesToCellName(idCol, r)
+	for row := 2; row <= rowCount; row++ { // assumes that data begins at 2nd row
+		idCoords, _ := excelize.CoordinatesToCellName(idCol, row)
 		identifierValue, _ := file.GetCellValue(sh, idCoords)
 
+		// TODO: implement externalArticleNumber indentifier logic
 		listResult, _ := svc.tariffAdapter.List(settings.Option{Name: "ebootis_id", Value: identifierValue})
-		_, err := svc.tariffAdapter.Update(settings.Option{Name: "id", Value: listResult[0].Id})
+		for _, lookupObj := range listResult {
+			tariffObj, _ := svc.tariffAdapter.Read(lookupObj.Id)
 
-		// tariffObj := svc.tariffAdapter.Update()
-		// tariffObj := svc.tariffAdapter.List()
+			for _, instruction := range mi.Mapping {
+				coords, _ := excelize.CoordinatesToCellName(instruction.ColIndex, row)
+				cellVal, _ := file.GetCellValue(sh, coords)
 
-		for c := 1; c <= colCount; c++ {
-			if c == idCol {
-				continue
+				switch instruction.MappingValue {
+				case "BasicCharge":
+					tariffObj.BasicCharge, _ = strconv.ParseFloat(cellVal, 64)
+				}
+				// coords, _ := excelize.CoordinatesToCellName(c, r)
+				// cellValue, _ := file.GetCellValue(sh, coords)
 			}
-
-			// coords, _ := excelize.CoordinatesToCellName(c, r)
-			// cellValue, _ := file.GetCellValue(sh, coords)
 		}
+
 	}
 
 	return nil, nil
 }
+
+// func updateTariff(crud *tariff.TariffCRUD, mo MappingObject, r row) {
+// 	switch mo.MappingValue {
+// 	case ""
+// 	}
+// }
