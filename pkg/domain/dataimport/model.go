@@ -21,8 +21,9 @@ type MappingOptions struct {
 
 // Instructions sent to BE after mapping in FE
 type MappingInstruction struct {
-	Mapping []MappingObject
-	Uuid    string
+	Mapping    []MappingObject
+	Uuid       string
+	UploadType string
 }
 
 type MappingObject struct {

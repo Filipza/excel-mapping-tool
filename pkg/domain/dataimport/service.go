@@ -227,10 +227,9 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 	}
 
 	sh := sheetLists[0]
+	rowCount := 0
 	rows, _ := file.Rows(sh)
 	rows.Next() // Iteration to first (header) row to read relevant colCount.
-
-	rowCount := 0
 	for rows.Next() {
 		rowCount++
 	}
@@ -251,12 +250,22 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 				switch instruction.MappingValue {
 				case "BasicCharge":
 					tariffObj.BasicCharge, _ = strconv.ParseFloat(cellVal, 64)
+				case "Leadype":
+					tariffObj.LeadType, _ = strconv.Atoi(cellVal)
+				case "DataVolume":
+					tariffObj.DataVolume, _ = strconv.ParseFloat(cellVal, 64)
+				case "Legalnote":
+					tariffObj.LegalNote = cellVal
+				case "Wkz":
+					// ? Warum wkz []*product.Option?
+					// tariffObj.Wkz = cellVal
+				case "":
 				}
-				// coords, _ := excelize.CoordinatesToCellName(c, r)
-				// cellValue, _ := file.GetCellValue(sh, coords)
 			}
-		}
+			// coords, _ := excelize.CoordinatesToCellName(c, r)
+			// cellValue, _ := file.GetCellValue(sh, coords)
 
+		}
 	}
 
 	return nil, nil
