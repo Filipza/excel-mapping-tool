@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/Filipza/excel-mapping-tool/internal/domain/v1/crud"
+	"github.com/Filipza/excel-mapping-tool/internal/domain/v1/product"
 	"github.com/Filipza/excel-mapping-tool/internal/domain/v1/tariff"
 	"github.com/Filipza/excel-mapping-tool/internal/settings"
 	"github.com/google/uuid"
@@ -28,33 +30,31 @@ type mappingService struct {
 
 var DROPDOWN_OPTIONS = map[string]map[string]string{
 	"tariff": {
-		"EbootisId":                  "EbootisId",
-		"BasicCharge":                "Preis monatlich",
-		"monthlyPriceAfterPromotion": "Preis monatlich nach Aktionszeitraum",
-		"LeadType":                   "Lead Type",
-		"storeBonus":                 "Marktprämie",
-		"onlineBonus":                "Onlineprämie",
-		"ConnectionFee":              "Anschlussgebühr in Euro",
-		"DataVolume":                 "Inkl. Datenvolumen in GB",
-		"legalNote":                  "Legalnote",
-		"highlight1":                 "Highlight 1",
-		"highlight2":                 "Highlight 2",
-		"highlight3":                 "Highlight 3",
-		"highlight4":                 "Highlight 4",
-		"highlight5":                 "Highlight 5",
-		"PibLink":                    "Pib-URL",
-		"connectionFee":              "Anschlusspreis",
-		"monthlyBasePrice":           "Monatsgrundpreis",
-		"inclBenefit1":               "Inklusiv-Benefit 1",
-		"inclBenefit2":               "Inklusiv-Benefit 2",
-		"inclBenefit3":               "Inklusiv-Benefit 3",
-		"inclBenefit4":               "Inklusiv-Benefit 4",
-		"inclBenefit5":               "Inklusiv-Benefit 5",
-		"Wkz":                        "WKZ",
+		"EbootisId":     "EbootisId",
+		"BasicCharge":   "Preis monatlich",
+		"LeadType":      "Lead Type",
+		"Provision":     "Marktprämie",
+		"XProvision":    "Onlineprämie",
+		"ConnectionFee": "Anschlussgebühr in Euro",
+		"DataVolume":    "Inkl. Datenvolumen in GB",
+		"LegalNote":     "Legalnote",
+		"Highlight1":    "Highlight 1",
+		"Highlight2":    "Highlight 2",
+		"Highlight3":    "Highlight 3",
+		"Highlight4":    "Highlight 4",
+		"Highlight5":    "Highlight 5",
+		"PibLink":       "Pib-URL",
+		"Bullet1":       "Inklusiv-Benefit 1",
+		"Bullet2":       "Inklusiv-Benefit 2",
+		"Bullet3":       "Inklusiv-Benefit 3",
+		"Bullet4":       "Inklusiv-Benefit 4",
+		"Bullet5":       "Inklusiv-Benefit 5",
+		"SupplierWkz":   "Supplier WKZ",
+		"TariffWkz":     "Tariff WKZ",
 	},
 	"hardware": {
 		"EbootisId":             "EbootisId",
-		"externalArticleNumber": "Exerterne Artikelnr.",
+		"ExternalArticleNumber": "Exerterne Artikelnr.",
 		"ek":                    "EK",
 		"manufactWkz":           "Manufacturer WKZ",
 		"ek24Wkz":               "ek24 WKZ",
@@ -227,29 +227,44 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 	}
 
 	sh := sheetLists[0]
-	rowCount := 0
 	rows, _ := file.Rows(sh)
-	rows.Next() // Iteration to first (header) row to read relevant colCount.
-	for rows.Next() {
-		rowCount++
-	}
+	row := 2 // assumes that data begins at 2nd row
 
-	for row := 2; row <= rowCount; row++ { // assumes that data begins at 2nd row
-		idCoords, _ := excelize.CoordinatesToCellName(idCol, row)
-		identifierValue, _ := file.GetCellValue(sh, idCoords)
+	for rows.Next() {
+		row++
+
+		idCoords, err := excelize.CoordinatesToCellName(idCol, row)
+		if err != nil {
+			// TODO: Adjustments necessary. Skip and log row when error occurs
+			return nil, &Error{
+				ErrTitle: "Koordinatenfehler",
+				ErrMsg:   fmt.Sprintf("Identifikationskoordinate konnte in Zeile %v nicht in Zellname umgewandelt werden", row),
+			}
+		}
+		identifierValue, err := file.GetCellValue(sh, idCoords)
+		if err != nil {
+			// TODO: Adjustments necessary. Skip and log row when error occurs
+			return nil, &Error{
+				ErrTitle: "Zellen-Lesefehler",
+				ErrMsg:   fmt.Sprintf("Der Zelleninhalt der Zelle %s konnte nicht gelesen werden", idCoords),
+			}
+		}
 
 		// TODO: implement externalArticleNumber indentifier logic
 		listResult, _ := svc.tariffAdapter.List(settings.Option{Name: "ebootis_id", Value: identifierValue})
 		for _, lookupObj := range listResult {
 			tariffObj, _ := svc.tariffAdapter.Read(lookupObj.Id)
 
-			for _, instruction := range mi.Mapping {
-				coords, _ := excelize.CoordinatesToCellName(instruction.ColIndex, row)
+			highlightArr := make([]string, 5)
+			copy(highlightArr, tariffObj.Highlights)
+
+			for _, inst := range mi.Mapping {
+				coords, _ := excelize.CoordinatesToCellName(inst.ColIndex, row)
 				cellVal, _ := file.GetCellValue(sh, coords)
 
-				switch instruction.MappingValue {
+				switch inst.MappingValue {
 				case "BasicCharge":
-					tariffObj.BasicCharge, _ = strconv.ParseFloat(cellVal, 64)
+					tariffObj.BasicCharge, _ = strconv.ParseFloat(strings.ReplaceAll(cellVal, ",", "."), 64)
 				case "Leadype":
 					tariffObj.LeadType, _ = strconv.Atoi(cellVal)
 				case "DataVolume":
@@ -259,20 +274,51 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 				case "Wkz":
 					// ? Warum wkz []*product.Option?
 					// tariffObj.Wkz = cellVal
-				case "":
+					// analog zu bullets prüfen ob containsKey
+				case "Highlight1", "Highlight2", "Highlight3", "Highlight4", "Highlight5":
+					lastdigit, _ := strconv.Atoi(string(inst.MappingValue[len(inst.MappingValue)-1]))
+					highlightArr[lastdigit-1] = cellVal
+				case "Bullet1":
+					// funktion auslagern
+					ok, i := containsKey(tariffObj, 1)
+
+					// test := func() {
+					// 	fmt.Println("TEST")
+					// }
+					// test()
+
+					if !ok {
+						newOption := product.Option{Key: "tariff_inclusive_benefit1", Value: cellVal}
+						tariffObj.Bullets = append(tariffObj.Bullets, &newOption)
+						continue
+					}
+
+					tariffObj.Bullets[i].Value = cellVal
 				}
 			}
-			// coords, _ := excelize.CoordinatesToCellName(c, r)
-			// cellValue, _ := file.GetCellValue(sh, coords)
 
+			// reducing array to minimum length and writing to tariffCRUD
+			lenDiff := 0
+			for i := len(highlightArr) - 1; i >= 0; i++ {
+				if highlightArr[i] != "" {
+					break
+				}
+				lenDiff++
+			}
+			highlightArr = highlightArr[:len(highlightArr)-lenDiff]
+			copy(tariffObj.Highlights, highlightArr)
 		}
 	}
 
 	return nil, nil
 }
 
-// func updateTariff(crud *tariff.TariffCRUD, mo MappingObject, r row) {
-// 	switch mo.MappingValue {
-// 	case ""
-// 	}
-// }
+func containsKey(t *tariff.TariffCRUD, i int) (bool, int) {
+	for j, b := range t.Bullets {
+		if b.Key == fmt.Sprintf("tariff_inclusive_benefit%d", i) {
+			return true, j
+		}
+	}
+
+	return false, -1
+}
