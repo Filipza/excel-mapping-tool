@@ -30,37 +30,39 @@ type mappingService struct {
 
 var DROPDOWN_OPTIONS = map[string]map[string]string{
 	"tariff": {
-		"EbootisId":     "EbootisId",
-		"BasicCharge":   "Preis monatlich",
-		"LeadType":      "Lead Type",
-		"Provision":     "Marktprämie",
-		"XProvision":    "Onlineprämie",
-		"ConnectionFee": "Anschlussgebühr in Euro",
-		"DataVolume":    "Inkl. Datenvolumen in GB",
-		"LegalNote":     "Legalnote",
-		"Highlight1":    "Highlight 1",
-		"Highlight2":    "Highlight 2",
-		"Highlight3":    "Highlight 3",
-		"Highlight4":    "Highlight 4",
-		"Highlight5":    "Highlight 5",
-		"PibLink":       "Pib-URL",
-		"Bullet1":       "Inklusiv-Benefit 1",
-		"Bullet2":       "Inklusiv-Benefit 2",
-		"Bullet3":       "Inklusiv-Benefit 3",
-		"Bullet4":       "Inklusiv-Benefit 4",
-		"Bullet5":       "Inklusiv-Benefit 5",
-		"SupplierWkz":   "Supplier WKZ",
-		"TariffWkz":     "Tariff WKZ",
+		"ebootisId":          "EbootisId",
+		"basicCharge":        "Preis monatlich",
+		"basicChargeRenewal": "Preis monatlich nach Aktionszeitraum",
+		"leadType":           "Lead Type",
+		"provision":          "Marktprämie",
+		"xProvision":         "Onlineprämie",
+		"connectionFee":      "Anschlussgebühr in Euro",
+		"dataVolume":         "Inkl. Datenvolumen in GB",
+		"legalNote":          "Legalnote",
+		"pibLink":            "Pib-URL",
+		"highlight1":         "Highlight 1",
+		"highlight2":         "Highlight 2",
+		"highlight3":         "Highlight 3",
+		"highlight4":         "Highlight 4",
+		"highlight5":         "Highlight 5",
+		"bullet1":            "Inklusiv-Benefit 1",
+		"bullet2":            "Inklusiv-Benefit 2",
+		"bullet3":            "Inklusiv-Benefit 3",
+		"bullet4":            "Inklusiv-Benefit 4",
+		"bullet5":            "Inklusiv-Benefit 5",
+		"bullet6":            "Inklusiv-Benefit 6",
+		"supplierWkz":        "Supplier WKZ",
+		"tariffWkz":          "Tariff WKZ",
 	},
 	"hardware": {
-		"EbootisId":             "EbootisId",
-		"ExternalArticleNumber": "Exerterne Artikelnr.",
+		"ebootisId":             "EbootisId",
+		"externalArticleNumber": "Exerterne Artikelnr.",
 		"ek":                    "EK",
 		"manufactWkz":           "Manufacturer WKZ",
 		"ek24Wkz":               "ek24 WKZ",
 	},
 	"stocks": {
-		"EbootisId":             "EbootisId",
+		"ebootisId":             "EbootisId",
 		"externalArticleNumber": "Exerterne Artikelnr.",
 		"currentStock":          "Stock aktuell",
 		"originalStock":         "Stock original",
@@ -263,43 +265,75 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 				cellVal, _ := file.GetCellValue(sh, coords)
 
 				switch inst.MappingValue {
-				case "BasicCharge":
+				case "basicCharge":
 					tariffObj.BasicCharge, _ = strconv.ParseFloat(strings.ReplaceAll(cellVal, ",", "."), 64)
-				case "Leadype":
+				case "basicChargeRenewal": // ? richtiges Feld für "nach Aktionszeitraum?"
+					tariffObj.BasicChargeRenewal, _ = strconv.ParseFloat(strings.ReplaceAll(cellVal, ",", "."), 64)
+				case "leadype":
 					tariffObj.LeadType, _ = strconv.Atoi(cellVal)
-				case "DataVolume":
-					tariffObj.DataVolume, _ = strconv.ParseFloat(cellVal, 64)
-				case "Legalnote":
+				case "provision":
+					tariffObj.Provision, _ = strconv.ParseFloat(strings.ReplaceAll(cellVal, ",", "."), 64)
+				case "xProvision":
+					tariffObj.XProvision, _ = strconv.ParseFloat(strings.ReplaceAll(cellVal, ",", "."), 64)
+				case "connectionFee":
+					tariffObj.ConnectionFee, _ = strconv.ParseFloat(strings.ReplaceAll(cellVal, ",", "."), 64)
+				case "dataVolume":
+					tariffObj.DataVolume, _ = strconv.ParseFloat(strings.ReplaceAll(cellVal, ",", "."), 64)
+				case "legalnote":
 					tariffObj.LegalNote = cellVal
-				case "Wkz":
-					// ? Warum wkz []*product.Option?
-					// tariffObj.Wkz = cellVal
-					// analog zu bullets prüfen ob containsKey
-				case "Highlight1", "Highlight2", "Highlight3", "Highlight4", "Highlight5":
+				case "pibLink":
+					tariffObj.PibLink = cellVal
+				case "highlight1", "highlight2", "highlight3", "highlight4", "highlight5":
 					lastdigit, _ := strconv.Atoi(string(inst.MappingValue[len(inst.MappingValue)-1]))
 					highlightArr[lastdigit-1] = cellVal
-				case "Bullet1":
-					// funktion auslagern
-					ok, i := containsKey(tariffObj, 1)
-
-					// test := func() {
-					// 	fmt.Println("TEST")
-					// }
-					// test()
+				case "bullet1", "bullet2", "bullet3", "bullet4", "bullet5", "bullet6":
+					lastdigit := string(inst.MappingValue[len(inst.MappingValue)-1])
+					key := fmt.Sprintf("tariff_inclusive_benefit%s", lastdigit)
+					ok, i := containsKey(tariffObj.Bullets, key)
 
 					if !ok {
-						newOption := product.Option{Key: "tariff_inclusive_benefit1", Value: cellVal}
-						tariffObj.Bullets = append(tariffObj.Bullets, &newOption)
+						newOpt := product.Option{Key: key, Value: cellVal}
+						tariffObj.Bullets = append(tariffObj.Bullets, &newOpt)
 						continue
 					}
-
 					tariffObj.Bullets[i].Value = cellVal
+
+				case "supplierWkz":
+					ok, i := containsKey(tariffObj.Wkz, "supplier")
+
+					if !ok {
+						newOpt := product.Option{Key: "supplier", Value: cellVal}
+						tariffObj.Wkz = append(tariffObj.Wkz, &newOpt)
+						continue
+					}
+					tariffObj.Wkz[i].Value = cellVal
+				case "tariffWkz":
+					ok, i := containsKey(tariffObj.Wkz, "tariff")
+
+					if !ok {
+						newOpt := product.Option{Key: "tariff", Value: cellVal}
+						tariffObj.Wkz = append(tariffObj.Wkz, &newOpt)
+						continue
+					}
+					tariffObj.Wkz[i].Value = cellVal
+					// case "supplierWkz", "tariffWkz":
+					// 	re := regexp.MustCompile(`(.+?)Wkz`)
+					// 	key := re.FindStringSubmatch(inst.MappingValue)
+
+					// 	ok, i := containsKey(tariffObj.Wkz, key[0])
+
+					// 	if !ok {
+					// 		newOpt := product.Option{Key: key[0], Value: cellVal}
+					// 		tariffObj.Wkz = append(tariffObj.Wkz, &newOpt)
+					// 		continue
+					// 	}
+					// 	tariffObj.Wkz[i].Value = cellVal
 				}
 			}
 
 			// reducing array to minimum length and writing to tariffCRUD
 			lenDiff := 0
-			for i := len(highlightArr) - 1; i >= 0; i++ {
+			for i := len(highlightArr) - 1; i >= 0; i-- {
 				if highlightArr[i] != "" {
 					break
 				}
@@ -313,12 +347,103 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 	return nil, nil
 }
 
-func containsKey(t *tariff.TariffCRUD, i int) (bool, int) {
-	for j, b := range t.Bullets {
-		if b.Key == fmt.Sprintf("tariff_inclusive_benefit%d", i) {
-			return true, j
+func containsKey(opts []*product.Option, s string) (bool, int) {
+	for i, b := range opts {
+		if b.Key == s {
+			return true, i
 		}
 	}
-
 	return false, -1
+}
+
+func updateTariff(svc *mappingService, mi *MappingInstruction, file *excelize.File, identifierValue string, row int, sh string) {
+	listResult, _ := svc.tariffAdapter.List(settings.Option{Name: "ebootis_id", Value: identifierValue})
+	for _, lookupObj := range listResult {
+		tariffObj, _ := svc.tariffAdapter.Read(lookupObj.Id)
+
+		highlightArr := make([]string, 5)
+		copy(highlightArr, tariffObj.Highlights)
+
+		for _, inst := range mi.Mapping {
+			coords, _ := excelize.CoordinatesToCellName(inst.ColIndex, row)
+			cellVal, _ := file.GetCellValue(sh, coords)
+
+			switch inst.MappingValue {
+			case "basicCharge":
+				tariffObj.BasicCharge, _ = strconv.ParseFloat(strings.ReplaceAll(cellVal, ",", "."), 64)
+			case "basicChargeRenewal": // ? richtiges Feld für "nach Aktionszeitraum?"
+				tariffObj.BasicChargeRenewal, _ = strconv.ParseFloat(strings.ReplaceAll(cellVal, ",", "."), 64)
+			case "leadype":
+				tariffObj.LeadType, _ = strconv.Atoi(cellVal)
+			case "provision":
+				tariffObj.Provision, _ = strconv.ParseFloat(strings.ReplaceAll(cellVal, ",", "."), 64)
+			case "xProvision":
+				tariffObj.XProvision, _ = strconv.ParseFloat(strings.ReplaceAll(cellVal, ",", "."), 64)
+			case "connectionFee":
+				tariffObj.ConnectionFee, _ = strconv.ParseFloat(strings.ReplaceAll(cellVal, ",", "."), 64)
+			case "dataVolume":
+				tariffObj.DataVolume, _ = strconv.ParseFloat(strings.ReplaceAll(cellVal, ",", "."), 64)
+			case "legalnote":
+				tariffObj.LegalNote = cellVal
+			case "pibLink":
+				tariffObj.PibLink = cellVal
+			case "highlight1", "highlight2", "highlight3", "highlight4", "highlight5":
+				lastdigit, _ := strconv.Atoi(string(inst.MappingValue[len(inst.MappingValue)-1]))
+				highlightArr[lastdigit-1] = cellVal
+			case "bullet1", "bullet2", "bullet3", "bullet4", "bullet5", "bullet6":
+				lastdigit := string(inst.MappingValue[len(inst.MappingValue)-1])
+				key := fmt.Sprintf("tariff_inclusive_benefit%s", lastdigit)
+				ok, i := containsKey(tariffObj.Bullets, key)
+
+				if !ok {
+					newOpt := product.Option{Key: key, Value: cellVal}
+					tariffObj.Bullets = append(tariffObj.Bullets, &newOpt)
+					continue
+				}
+				tariffObj.Bullets[i].Value = cellVal
+
+			case "supplierWkz":
+				ok, i := containsKey(tariffObj.Wkz, "supplier")
+
+				if !ok {
+					newOpt := product.Option{Key: "supplier", Value: cellVal}
+					tariffObj.Wkz = append(tariffObj.Wkz, &newOpt)
+					continue
+				}
+				tariffObj.Wkz[i].Value = cellVal
+			case "tariffWkz":
+				ok, i := containsKey(tariffObj.Wkz, "tariff")
+
+				if !ok {
+					newOpt := product.Option{Key: "tariff", Value: cellVal}
+					tariffObj.Wkz = append(tariffObj.Wkz, &newOpt)
+					continue
+				}
+				tariffObj.Wkz[i].Value = cellVal
+				// case "supplierWkz", "tariffWkz":
+				// 	re := regexp.MustCompile(`(.+?)Wkz`)
+				// 	key := re.FindStringSubmatch(inst.MappingValue)
+
+				// 	ok, i := containsKey(tariffObj.Wkz, key[0])
+
+				// 	if !ok {
+				// 		newOpt := product.Option{Key: key[0], Value: cellVal}
+				// 		tariffObj.Wkz = append(tariffObj.Wkz, &newOpt)
+				// 		continue
+				// 	}
+				// 	tariffObj.Wkz[i].Value = cellVal
+			}
+		}
+
+		// reducing array to minimum length and writing to tariffCRUD
+		lenDiff := 0
+		for i := len(highlightArr) - 1; i >= 0; i-- {
+			if highlightArr[i] != "" {
+				break
+			}
+			lenDiff++
+		}
+		highlightArr = highlightArr[:len(highlightArr)-lenDiff]
+		copy(tariffObj.Highlights, highlightArr)
+	}
 }

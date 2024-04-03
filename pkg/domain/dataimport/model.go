@@ -46,13 +46,13 @@ func (err *Error) Error() string {
 	return fmt.Sprintf("Error: %s", err.ErrMsg)
 }
 
-// Returns according column index and identifier type (ebootis or externalArticleNumber) if either is found.
+// Returns according column index and identifier type (ebootisId or externalArticleNumber) if either is found.
 // Returns false, 0 and "" if none identifier is found.
 func (mi *MappingInstruction) GetIdentifierIndex() (exists bool, idIndex int, idType string) {
 	for i, m := range mi.Mapping {
 		switch m.MappingValue {
-		case "EbootisId":
-			return true, i, "EbootisId"
+		case "ebootisId":
+			return true, i, "ebootisId"
 		case "externalArticleNumber":
 			exists = true
 			idIndex = i
