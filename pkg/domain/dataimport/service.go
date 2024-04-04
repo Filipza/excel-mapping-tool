@@ -196,11 +196,9 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 }
 
 func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult, error) {
-
+	result := &MappingResult{}
 	exists, idIndex, _ := mi.GetIdentifierIndex()
 	idCol := idIndex + 1
-
-	fmt.Println(idCol)
 
 	if !exists {
 		return nil, &Error{
@@ -233,7 +231,7 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 	for row := 1; rows.Next(); row++ {
 
 		if row == 1 {
-			continue // skips header
+			continue // skips header row
 		}
 
 		idCoords, err := excelize.CoordinatesToCellName(idCol, row)
@@ -253,16 +251,37 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 			}
 		}
 
-		svc.updateTariff(mi, file, identifierValue, row, sh)
-	}
+		err = svc.updateTariff(mi, file, identifierValue, row, sh)
 
-	return nil, nil
+		if err != nil {
+			result.UnsuccessfulRows++
+			result.FailedRows = append(result.FailedRows, Error{
+				ErrTitle: "Zellen-Lesefehler",
+				ErrMsg:   fmt.Sprintf("Fehler in Zeile %d.", row),
+			})
+			continue
+		}
+		result.SuccessfulRows++
+	}
+	return result, err
 }
 
-func (svc *mappingService) updateTariff(mi *MappingInstruction, file *excelize.File, identifierValue string, row int, sh string) {
-	listResult, _ := svc.tariffAdapter.List(settings.Option{Name: "ebootis_id", Value: identifierValue})
+func (svc *mappingService) updateTariff(mi *MappingInstruction, file *excelize.File, identifierValue string, row int, sh string) error {
+	listResult, err := svc.tariffAdapter.List(settings.Option{Name: "ebootis_id", Value: identifierValue})
+	if err != nil {
+		return &Error{ // ? oder einfach den .List error zurückgeben?
+			ErrTitle: "Identifizierungs-Fehler",
+			ErrMsg:   fmt.Sprintf("Es konnten keine Tarifobjekte mit der EbootisId '%s' ermittelt werden", identifierValue),
+		}
+	}
 	for _, lookupObj := range listResult {
-		tariffObj, _ := svc.tariffAdapter.Read(lookupObj.Id)
+		tariffObj, err := svc.tariffAdapter.Read(lookupObj.Id)
+		if err != nil { // ? oder einfach den .Read error zurückgeben?
+			return &Error{
+				ErrTitle: "Identifizierungs-Fehler",
+				ErrMsg:   fmt.Sprintf("Es konnten kein Tarifobjekt mit der id %s ermittelt werden.", lookupObj.Id),
+			}
+		}
 
 		highlightArr := make([]string, 5)
 		copy(highlightArr, tariffObj.Highlights)
@@ -273,7 +292,7 @@ func (svc *mappingService) updateTariff(mi *MappingInstruction, file *excelize.F
 
 			switch inst.MappingValue {
 			case "basicCharge":
-				// TODO: getPeriodFloat ok?
+				// ? getPeriodFloat ok?
 				tariffObj.BasicCharge, _ = getPeriodFloat(cellVal)
 
 				if len(tariffObj.PricingIntervals) > 0 {
@@ -299,18 +318,8 @@ func (svc *mappingService) updateTariff(mi *MappingInstruction, file *excelize.F
 			case "connectionFee":
 				tariffObj.ConnectionFee, _ = getPeriodFloat(cellVal)
 
-				// connectionFee schreiben mit neuer writeBullet func() key: tariff_connection_fee (Eurozeichen hinzufügen)
 				cellVal += " €"
 				tariffObj.Bullets = writeOptionArr(tariffObj.Bullets, "tariff_connection_fee", cellVal)
-
-				ok, i := containsKey(tariffObj.Bullets, "tariff_monthly_price")
-
-				if !ok {
-					newOpt := product.Option{Key: "tariff_monthly_price", Value: cellVal}
-					tariffObj.Bullets = append(tariffObj.Bullets, &newOpt)
-					continue
-				}
-				tariffObj.Bullets[i].Value = cellVal
 			case "dataVolume":
 				tariffObj.DataVolume, _ = getPeriodFloat(cellVal)
 			case "legalnote":
@@ -322,28 +331,13 @@ func (svc *mappingService) updateTariff(mi *MappingInstruction, file *excelize.F
 				lastdigit := int(inst.MappingValue[len(inst.MappingValue)-1]) - '0'
 				highlightArr[lastdigit-1] = cellVal
 			case "bullet1", "bullet2", "bullet3", "bullet4", "bullet5", "bullet6":
-				// Extracts last digit of "bulletx" key, to search for according "tariff_inclusive_benefitsx" key
+				// Extracts last digit of "bulletx" key, to get according "tariff_inclusive_benefitsx" key
 				lastdigit := string(inst.MappingValue[len(inst.MappingValue)-1])
 				key := fmt.Sprintf("tariff_inclusive_benefit%s", lastdigit)
-				//
-				ok, i := containsKey(tariffObj.Bullets, key)
-
-				if !ok {
-					newOpt := product.Option{Key: key, Value: cellVal}
-					tariffObj.Bullets = append(tariffObj.Bullets, &newOpt)
-					continue
-				}
-				tariffObj.Bullets[i].Value = cellVal
+				tariffObj.Bullets = writeOptionArr(tariffObj.Bullets, key, cellVal)
 			case "supplierWkz", "tariffWkz":
 				key := strings.TrimRight(inst.MappingValue, "Wkz")
-				ok, i := containsKey(tariffObj.Wkz, key)
-
-				if !ok {
-					newOpt := product.Option{Key: key, Value: cellVal}
-					tariffObj.Wkz = append(tariffObj.Wkz, &newOpt)
-					continue
-				}
-				tariffObj.Wkz[i].Value = cellVal
+				tariffObj.Wkz = writeOptionArr(tariffObj.Wkz, key, cellVal)
 			}
 		}
 
@@ -358,6 +352,7 @@ func (svc *mappingService) updateTariff(mi *MappingInstruction, file *excelize.F
 		highlightArr = highlightArr[:len(highlightArr)-lenDiff]
 		copy(tariffObj.Highlights, highlightArr)
 	}
+	return err
 }
 
 func writeOptionArr(arr []*product.Option, key string, cellVal string) []*product.Option {
@@ -367,7 +362,6 @@ func writeOptionArr(arr []*product.Option, key string, cellVal string) []*produc
 			return arr
 		}
 	}
-
 	newOpt := product.Option{Key: key, Value: cellVal}
 	arr = append(arr, &newOpt)
 	return arr

@@ -34,7 +34,7 @@ type MappingObject struct {
 type MappingResult struct {
 	SuccessfulRows   int
 	UnsuccessfulRows int
-	FailedRows       []string
+	FailedRows       []Error
 }
 
 type Error struct {
