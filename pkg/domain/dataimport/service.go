@@ -36,7 +36,7 @@ var DROPDOWN_OPTIONS = map[string]map[string]string{
 		"leadType":           "Lead Type",
 		"provision":          "Marktprämie",
 		"xProvision":         "Onlineprämie",
-		"connectionFee":      "Anschlussgebühr in Euro",
+		"connectionFee":      "Anschlussgebühr (ohne EUR-Zeichen)",
 		"dataVolume":         "Inkl. Datenvolumen in GB",
 		"legalNote":          "Legalnote",
 		"pibLink":            "Pib-URL",
@@ -186,7 +186,6 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 
 		if i == 0 {
 			mappingOptions.TableHeaders = cols
-			// fmt.Println(cols)
 			continue
 		}
 
@@ -230,10 +229,12 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 
 	sh := sheetLists[0]
 	rows, _ := file.Rows(sh)
-	row := 2 // assumes that data begins at 2nd row
 
-	for rows.Next() {
-		row++
+	for row := 1; rows.Next(); row++ {
+
+		if row == 1 {
+			continue // skips header
+		}
 
 		idCoords, err := excelize.CoordinatesToCellName(idCol, row)
 		if err != nil {
@@ -252,22 +253,13 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 			}
 		}
 
-		updateTariff(svc, mi, file, identifierValue, row, sh)
+		svc.updateTariff(mi, file, identifierValue, row, sh)
 	}
 
 	return nil, nil
 }
 
-func containsKey(opts []*product.Option, s string) (bool, int) {
-	for i, b := range opts {
-		if b.Key == s {
-			return true, i
-		}
-	}
-	return false, -1
-}
-
-func updateTariff(svc *mappingService, mi *MappingInstruction, file *excelize.File, identifierValue string, row int, sh string) {
+func (svc *mappingService) updateTariff(mi *MappingInstruction, file *excelize.File, identifierValue string, row int, sh string) {
 	listResult, _ := svc.tariffAdapter.List(settings.Option{Name: "ebootis_id", Value: identifierValue})
 	for _, lookupObj := range listResult {
 		tariffObj, _ := svc.tariffAdapter.Read(lookupObj.Id)
@@ -281,29 +273,59 @@ func updateTariff(svc *mappingService, mi *MappingInstruction, file *excelize.Fi
 
 			switch inst.MappingValue {
 			case "basicCharge":
-				tariffObj.BasicCharge, _ = strconv.ParseFloat(strings.ReplaceAll(cellVal, ",", "."), 64)
-			case "basicChargeRenewal": // ? richtiges Feld für "nach Aktionszeitraum?"
-				tariffObj.BasicChargeRenewal, _ = strconv.ParseFloat(strings.ReplaceAll(cellVal, ",", "."), 64)
+				// TODO: getPeriodFloat ok?
+				tariffObj.BasicCharge, _ = getPeriodFloat(cellVal)
+
+				if len(tariffObj.PricingIntervals) > 0 {
+					tariffObj.PricingIntervals[0].Price, _ = getPeriodFloat(cellVal)
+				}
+
+				// ! writebullet für tariff_monthly_price > problem, da in tariff_monthly_price auch
+				// ! strings wie "34.99€ (ab dem 13. Monat 69.99€)" stehen
+				cellVal += " €"
+				tariffObj.Bullets = writeOptionArr(tariffObj.Bullets, "tariff_monthly_price", cellVal)
+			case "basicChargeRenewal":
+				tariffObj.BasicChargeRenewal, _ = getPeriodFloat(cellVal)
+
+				if len(tariffObj.PricingIntervals) > 1 {
+					tariffObj.PricingIntervals[1].Price, _ = getPeriodFloat(cellVal)
+				}
 			case "leadype":
 				tariffObj.LeadType, _ = strconv.Atoi(cellVal)
 			case "provision":
-				tariffObj.Provision, _ = strconv.ParseFloat(strings.ReplaceAll(cellVal, ",", "."), 64)
+				tariffObj.Provision, _ = getPeriodFloat(cellVal)
 			case "xProvision":
-				tariffObj.XProvision, _ = strconv.ParseFloat(strings.ReplaceAll(cellVal, ",", "."), 64)
+				tariffObj.XProvision, _ = getPeriodFloat(cellVal)
 			case "connectionFee":
-				tariffObj.ConnectionFee, _ = strconv.ParseFloat(strings.ReplaceAll(cellVal, ",", "."), 64)
+				tariffObj.ConnectionFee, _ = getPeriodFloat(cellVal)
+
+				// connectionFee schreiben mit neuer writeBullet func() key: tariff_connection_fee (Eurozeichen hinzufügen)
+				cellVal += " €"
+				tariffObj.Bullets = writeOptionArr(tariffObj.Bullets, "tariff_connection_fee", cellVal)
+
+				ok, i := containsKey(tariffObj.Bullets, "tariff_monthly_price")
+
+				if !ok {
+					newOpt := product.Option{Key: "tariff_monthly_price", Value: cellVal}
+					tariffObj.Bullets = append(tariffObj.Bullets, &newOpt)
+					continue
+				}
+				tariffObj.Bullets[i].Value = cellVal
 			case "dataVolume":
-				tariffObj.DataVolume, _ = strconv.ParseFloat(strings.ReplaceAll(cellVal, ",", "."), 64)
+				tariffObj.DataVolume, _ = getPeriodFloat(cellVal)
 			case "legalnote":
 				tariffObj.LegalNote = cellVal
 			case "pibLink":
 				tariffObj.PibLink = cellVal
 			case "highlight1", "highlight2", "highlight3", "highlight4", "highlight5":
-				lastdigit, _ := strconv.Atoi(string(inst.MappingValue[len(inst.MappingValue)-1]))
+				// Extracts last digit of "highlightx" key, to get array index
+				lastdigit := int(inst.MappingValue[len(inst.MappingValue)-1]) - '0'
 				highlightArr[lastdigit-1] = cellVal
 			case "bullet1", "bullet2", "bullet3", "bullet4", "bullet5", "bullet6":
+				// Extracts last digit of "bulletx" key, to search for according "tariff_inclusive_benefitsx" key
 				lastdigit := string(inst.MappingValue[len(inst.MappingValue)-1])
 				key := fmt.Sprintf("tariff_inclusive_benefit%s", lastdigit)
+				//
 				ok, i := containsKey(tariffObj.Bullets, key)
 
 				if !ok {
@@ -312,37 +334,16 @@ func updateTariff(svc *mappingService, mi *MappingInstruction, file *excelize.Fi
 					continue
 				}
 				tariffObj.Bullets[i].Value = cellVal
-
-			case "supplierWkz":
-				ok, i := containsKey(tariffObj.Wkz, "supplier")
+			case "supplierWkz", "tariffWkz":
+				key := strings.TrimRight(inst.MappingValue, "Wkz")
+				ok, i := containsKey(tariffObj.Wkz, key)
 
 				if !ok {
-					newOpt := product.Option{Key: "supplier", Value: cellVal}
+					newOpt := product.Option{Key: key, Value: cellVal}
 					tariffObj.Wkz = append(tariffObj.Wkz, &newOpt)
 					continue
 				}
 				tariffObj.Wkz[i].Value = cellVal
-			case "tariffWkz":
-				ok, i := containsKey(tariffObj.Wkz, "tariff")
-
-				if !ok {
-					newOpt := product.Option{Key: "tariff", Value: cellVal}
-					tariffObj.Wkz = append(tariffObj.Wkz, &newOpt)
-					continue
-				}
-				tariffObj.Wkz[i].Value = cellVal
-				// case "supplierWkz", "tariffWkz":
-				// 	re := regexp.MustCompile(`(.+?)Wkz`)
-				// 	key := re.FindStringSubmatch(inst.MappingValue)
-
-				// 	ok, i := containsKey(tariffObj.Wkz, key[0])
-
-				// 	if !ok {
-				// 		newOpt := product.Option{Key: key[0], Value: cellVal}
-				// 		tariffObj.Wkz = append(tariffObj.Wkz, &newOpt)
-				// 		continue
-				// 	}
-				// 	tariffObj.Wkz[i].Value = cellVal
 			}
 		}
 
@@ -357,4 +358,21 @@ func updateTariff(svc *mappingService, mi *MappingInstruction, file *excelize.Fi
 		highlightArr = highlightArr[:len(highlightArr)-lenDiff]
 		copy(tariffObj.Highlights, highlightArr)
 	}
+}
+
+func writeOptionArr(arr []*product.Option, key string, cellVal string) []*product.Option {
+	for i, b := range arr {
+		if b.Key == key {
+			arr[i].Value = cellVal
+			return arr
+		}
+	}
+
+	newOpt := product.Option{Key: key, Value: cellVal}
+	arr = append(arr, &newOpt)
+	return arr
+}
+
+func getPeriodFloat(s string) (float64, error) {
+	return strconv.ParseFloat(strings.ReplaceAll(s, ",", "."), 64)
 }

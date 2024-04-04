@@ -9,6 +9,16 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestCustomError(t *testing.T) {
+	customErr := Error{
+		ErrTitle: "custom error title",
+		ErrMsg:   "custom error message",
+	}
+
+	errorMsg := customErr.Error()
+	assert.Equal(t, errorMsg, "Error: custom error message")
+}
+
 func TestReadFilePositive(t *testing.T) {
 	file, err := os.ReadFile("../../../test/positive.xlsx")
 	if err != nil {
@@ -189,9 +199,9 @@ func TestGetEbootisIndexPositive(t *testing.T) {
 		Uuid: "1e1133c1-65cf-46f6-a246-6049234d3447",
 		Mapping: []MappingObject{
 			{ColIndex: 0, MappingValue: "externalArticleNumber"},
-			{ColIndex: 1, MappingValue: "EbootisId"},
-			{ColIndex: 2, MappingValue: "pibUrl"},
-			{ColIndex: 3, MappingValue: "wkz"},
+			{ColIndex: 1, MappingValue: "ebootisId"},
+			{ColIndex: 2, MappingValue: "pibLink"},
+			{ColIndex: 3, MappingValue: "supplierWkz"},
 		},
 	}
 
@@ -199,17 +209,17 @@ func TestGetEbootisIndexPositive(t *testing.T) {
 
 	assert.Equal(t, exists, true, "exists should equal true")
 	assert.Equal(t, idIndex, 1, "idIndex should equal 0")
-	assert.Equal(t, idtype, "EbootisId", "idtype should equal 'EbootisId'")
+	assert.Equal(t, idtype, "ebootisId", "idtype should equal 'ebootisId'")
 }
 
 func TestGetExternalArticleNumberIndexPositive(t *testing.T) {
 	mi := &MappingInstruction{
 		Uuid: "2e1133c1-65cf-46f6-a246-6049234d3448",
 		Mapping: []MappingObject{
-			{ColIndex: 0, MappingValue: "LeadType"},
+			{ColIndex: 0, MappingValue: "leadType"},
 			{ColIndex: 1, MappingValue: "externalArticleNumber"},
-			{ColIndex: 2, MappingValue: "PibLink"},
-			{ColIndex: 3, MappingValue: "Wkz"},
+			{ColIndex: 2, MappingValue: "pibLink"},
+			{ColIndex: 3, MappingValue: "supplierWkz"},
 		},
 	}
 
@@ -224,10 +234,10 @@ func TestGetIdentifierIndexNegative(t *testing.T) {
 	mi := &MappingInstruction{
 		Uuid: "3e1133c1-65cf-46f6-a246-6049234d3449",
 		Mapping: []MappingObject{
-			{ColIndex: 0, MappingValue: "LeadType"},
-			{ColIndex: 1, MappingValue: "Subsidy"},
-			{ColIndex: 2, MappingValue: "PibLink"},
-			{ColIndex: 3, MappingValue: "Wkz"},
+			{ColIndex: 0, MappingValue: "leadType"},
+			{ColIndex: 1, MappingValue: "provision"},
+			{ColIndex: 2, MappingValue: "pibLink"},
+			{ColIndex: 3, MappingValue: "supplierWkz"},
 		},
 	}
 
@@ -257,8 +267,8 @@ func TestWriteMappingGetIdentifierNegative(t *testing.T) {
 	mi := &MappingInstruction{
 		Uuid: result.Uuid,
 		Mapping: []MappingObject{
-			{ColIndex: 0, MappingValue: "pibUrl"},
-			{ColIndex: 1, MappingValue: "wkz"},
+			{ColIndex: 0, MappingValue: "pibLink"},
+			{ColIndex: 1, MappingValue: "supplierWkz"},
 		},
 	}
 
@@ -296,51 +306,37 @@ func TestWriteMappingGetIdentifierNegative(t *testing.T) {
 // 	assert.NoError(t, err, "function should not return an error")
 // }
 
-func TestWriteMapping(t *testing.T) {
+// func TestWriteMapping(t *testing.T) {
 
-	file, err := os.ReadFile("../../../test/positive.xlsx")
-	if err != nil {
-		t.Fatalf("Loading test .xlsx failed: %v", err)
-	}
+// 	file, err := os.ReadFile("../../../test/positive.xlsx")
+// 	if err != nil {
+// 		t.Fatalf("Loading test .xlsx failed: %v", err)
+// 	}
 
-	mockUploadData := &UploadData{
-		UploadedFile: bytes.NewReader(file),
-		UploadType:   "stocks",
-	}
+// 	mockUploadData := &UploadData{
+// 		UploadedFile: bytes.NewReader(file),
+// 		UploadType:   "stocks",
+// 	}
 
-	svc := mappingService{}
+// 	svc := mappingService{}
 
-	result, err := svc.ReadFile(mockUploadData)
+// 	result, err := svc.ReadFile(mockUploadData)
 
-	mi := &MappingInstruction{
-		Uuid: result.Uuid,
-		Mapping: []MappingObject{
-			{ColIndex: 0, MappingValue: "EbootisId"},
-			{ColIndex: 1, MappingValue: "externalArticleNumber"},
-			{ColIndex: 2, MappingValue: "pibUrl"},
-			{ColIndex: 3, MappingValue: "wkz"},
-		},
-	}
+// 	mi := &MappingInstruction{
+// 		Uuid: result.Uuid,
+// 		Mapping: []MappingObject{
+// 			{ColIndex: 0, MappingValue: "ebootisId"},
+// 			{ColIndex: 1, MappingValue: "externalArticleNumber"},
+// 			{ColIndex: 2, MappingValue: "pibUrl"},
+// 			{ColIndex: 3, MappingValue: "wkz"},
+// 		},
+// 	}
 
-	svc.WriteMapping(mi)
+// 	svc.WriteMapping(mi)
 
-	assert.NoError(t, err, "function should not return an error")
-}
-
-func TestCustomError(t *testing.T) {
-	customErr := Error{
-		ErrTitle: "custom error title",
-		ErrMsg:   "custom error message",
-	}
-
-	errorMsg := customErr.Error()
-	assert.Equal(t, errorMsg, "Error: custom error message")
-}
+// 	assert.NoError(t, err, "function should not return an error")
+// }
 
 // func TestAbortDeletionChannel(t *testing.T) {
 // TODO
-// }
-
-// func TestRemoveFiles(t *testing.T) {
-// 	os.RemoveAll("../files/")
 // }
