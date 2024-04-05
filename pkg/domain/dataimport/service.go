@@ -116,7 +116,8 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 
 	file, err := excelize.OpenReader(ud.UploadedFile)
 	if err != nil {
-		log.Debug(err)
+		// errorf schreiben wo ich mich befinde
+		log.Error(err)
 		return nil, &Error{
 			ErrTitle: "Parsingfehler",
 			ErrMsg:   "Datei konnte nicht verarbeitet werden und möglicherweise korrupt.",
@@ -126,7 +127,7 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 
 	err = file.SaveAs(dirPath + "data.xlsx")
 	if err != nil {
-		log.Debug(err)
+		log.Error(err)
 		return nil, &Error{
 			ErrTitle: "Speicherfehler",
 			ErrMsg:   "Datei konnte nicht abespeichert werden.",
@@ -237,28 +238,27 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 		idCoords, err := excelize.CoordinatesToCellName(idCol, row)
 		if err != nil {
 			// TODO: Adjustments necessary. Skip and log row when error occurs
-			return nil, &Error{
+			result.FailedRows = append(result.FailedRows, Error{
 				ErrTitle: "Koordinatenfehler",
 				ErrMsg:   fmt.Sprintf("Identifikationskoordinate konnte in Zeile %v nicht in Zellname umgewandelt werden", row),
-			}
+			})
+			continue
 		}
 		identifierValue, err := file.GetCellValue(sh, idCoords)
 		if err != nil {
 			// TODO: Adjustments necessary. Skip and log row when error occurs
-			return nil, &Error{
-				ErrTitle: "Zellen-Lesefehler",
-				ErrMsg:   fmt.Sprintf("Der Zelleninhalt der Zelle %s konnte nicht gelesen werden", idCoords),
-			}
-		}
-
-		err = svc.updateTariff(mi, file, identifierValue, row, sh)
-
-		if err != nil {
-			result.UnsuccessfulRows++
 			result.FailedRows = append(result.FailedRows, Error{
 				ErrTitle: "Zellen-Lesefehler",
-				ErrMsg:   fmt.Sprintf("Fehler in Zeile %d.", row),
+				ErrMsg:   fmt.Sprintf("Der Zelleninhalt der Zelle %s konnte nicht gelesen werden", idCoords),
 			})
+			continue
+		}
+
+		updateErr := svc.updateTariff(mi, file, identifierValue, row, sh)
+
+		if updateErr != nil {
+			result.UnsuccessfulRows++
+			result.FailedRows = append(result.FailedRows, *updateErr)
 			continue
 		}
 		result.SuccessfulRows++
@@ -266,17 +266,19 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 	return result, err
 }
 
-func (svc *mappingService) updateTariff(mi *MappingInstruction, file *excelize.File, identifierValue string, row int, sh string) error {
+func (svc *mappingService) updateTariff(mi *MappingInstruction, file *excelize.File, identifierValue string, row int, sh string) *Error {
 	listResult, err := svc.tariffAdapter.List(settings.Option{Name: "ebootis_id", Value: identifierValue})
+	log.Error(err)
 	if err != nil {
-		return &Error{ // ? oder einfach den .List error zurückgeben?
+		return &Error{
 			ErrTitle: "Identifizierungs-Fehler",
 			ErrMsg:   fmt.Sprintf("Es konnten keine Tarifobjekte mit der EbootisId '%s' ermittelt werden", identifierValue),
 		}
 	}
 	for _, lookupObj := range listResult {
 		tariffObj, err := svc.tariffAdapter.Read(lookupObj.Id)
-		if err != nil { // ? oder einfach den .Read error zurückgeben?
+		log.Error(err)
+		if err != nil {
 			return &Error{
 				ErrTitle: "Identifizierungs-Fehler",
 				ErrMsg:   fmt.Sprintf("Es konnten kein Tarifobjekt mit der id %s ermittelt werden.", lookupObj.Id),
@@ -292,7 +294,6 @@ func (svc *mappingService) updateTariff(mi *MappingInstruction, file *excelize.F
 
 			switch inst.MappingValue {
 			case "basicCharge":
-				// ? getPeriodFloat ok?
 				tariffObj.BasicCharge, _ = getPeriodFloat(cellVal)
 
 				if len(tariffObj.PricingIntervals) > 0 {
@@ -301,6 +302,7 @@ func (svc *mappingService) updateTariff(mi *MappingInstruction, file *excelize.F
 
 				// ! writebullet für tariff_monthly_price > problem, da in tariff_monthly_price auch
 				// ! strings wie "34.99€ (ab dem 13. Monat 69.99€)" stehen
+				// Klärung mit Produktmanagement. Siehe Notizen
 				cellVal += " €"
 				tariffObj.Bullets = writeOptionArr(tariffObj.Bullets, "tariff_monthly_price", cellVal)
 			case "basicChargeRenewal":
@@ -351,8 +353,11 @@ func (svc *mappingService) updateTariff(mi *MappingInstruction, file *excelize.F
 		}
 		highlightArr = highlightArr[:len(highlightArr)-lenDiff]
 		copy(tariffObj.Highlights, highlightArr)
+
+		// write into db
+		svc.tariffAdapter.Update(lookupObj.Id, tariffObj)
 	}
-	return err
+	return nil
 }
 
 func writeOptionArr(arr []*product.Option, key string, cellVal string) []*product.Option {
