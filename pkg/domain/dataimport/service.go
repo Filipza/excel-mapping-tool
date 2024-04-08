@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Filipza/excel-mapping-tool/internal/domain/v1/crud"
+	"github.com/Filipza/excel-mapping-tool/internal/domain/v1/hardware"
 	"github.com/Filipza/excel-mapping-tool/internal/domain/v1/product"
 	"github.com/Filipza/excel-mapping-tool/internal/domain/v1/tariff"
 	"github.com/Filipza/excel-mapping-tool/internal/settings"
@@ -24,8 +25,10 @@ type MappingService interface {
 }
 
 type mappingService struct {
-	chanMap       sync.Map
-	tariffAdapter crud.CRUDService[tariff.TariffCRUD, tariff.TariffLookup]
+	chanMap         sync.Map
+	tariffAdapter   crud.CRUDService[tariff.TariffCRUD, tariff.TariffLookup]
+	hardwareAdapter crud.CRUDService[hardware.HardwareCRUD, hardware.HardwareLookup]
+	// variantAdapter  crud.CRUDService[hardware.VariantCRUD, hardware.VariantLookup]
 }
 
 var DROPDOWN_OPTIONS = map[string]map[string]string{
@@ -57,7 +60,7 @@ var DROPDOWN_OPTIONS = map[string]map[string]string{
 	"hardware": {
 		"ebootisId":             "EbootisId",
 		"externalArticleNumber": "Exerterne Artikelnr.",
-		"ek":                    "EK",
+		"price":                 "EK",
 		"manufactWkz":           "Manufacturer WKZ",
 		"ek24Wkz":               "ek24 WKZ",
 	},
@@ -100,19 +103,6 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 			return
 		}
 	}(dirPath, cleanupCh)
-
-	// TODO: Test timer channel and find out if Stop() actually doesnt stop timer
-	// type mappingService struct {
-	// 	timerMap sync.Map
-	// }
-	// timer := time.NewTimer(1800 * time.Second)
-	//svc.timerMap.Store(ud.Uuid, timer.C)
-	// go func(dirPath string, ch <-chan time.Time) {
-	// 	<-timer.C
-
-	// 	os.RemoveAll(dirPath)
-	// }(dirPath, timer.C)
-	// timer.Stop()
 
 	file, err := excelize.OpenReader(ud.UploadedFile)
 	if err != nil {
@@ -198,7 +188,14 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 
 func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult, error) {
 	result := &MappingResult{}
-	exists, idIndex, _ := mi.GetIdentifierIndex()
+
+	type hwUpdate struct {
+		hwCRUD *hardware.HardwareCRUD
+		isSucc bool
+	}
+	var hwUpdateArr []*hwUpdate
+
+	exists, idIndex, idType := mi.GetIdentifierIndex()
 	idCol := idIndex + 1
 
 	if !exists {
@@ -251,8 +248,20 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 			})
 			continue
 		}
+		var updateErr *Error
+		// uhList := make([]*hardware.HardwareCRUD, 0) // init Array with updated HardwareCRUD objects to prevent multiple hwCRUD calls
 
-		updateErr := svc.updateTariff(mi, file, identifierValue, row, sh)
+		switch mi.UploadType {
+		case "tariff":
+			updateErr = svc.updateTariff(mi, file, identifierValue, row, sh)
+		case "hardware":
+			var uh []*hardware.HardwareCRUD
+			uh, updateErr = svc.updateHardware(mi, file, identifierValue, idType, row, sh)
+			// Wie hardwareCRUD updaten, wenn bereits vorhanden? Wird von jedem "neuen" updateErr mit alten hardwareCRUD-Werten überschrieben
+
+			// case "stocks":
+			// updateErr = svc.updateStocks()
+		}
 
 		if updateErr != nil {
 			result.UnsuccessfulRows++
@@ -260,6 +269,11 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 			continue
 		}
 		result.SuccessfulRows++
+
+	}
+	if len(hwUpdateArr) > 0 {
+		// ! hier Varianten in hardwareCRUD schreiben
+		// writeHardware(uhList)
 	}
 	return result, err
 }
@@ -330,7 +344,7 @@ func (svc *mappingService) updateTariff(mi *MappingInstruction, file *excelize.F
 			case "connectionFee":
 				tariffObj.ConnectionFee, _ = getPeriodFloat(cellVal)
 
-				cellVal += " €"
+				cellVal += " €" // TODO: Produktmanagement nahebringen
 				tariffObj.Bullets = writeOptionArr(tariffObj.Bullets, "tariff_connection_fee", cellVal)
 			case "dataVolume":
 				tariffObj.DataVolume, _ = getPeriodFloat(cellVal)
@@ -368,6 +382,71 @@ func (svc *mappingService) updateTariff(mi *MappingInstruction, file *excelize.F
 		svc.tariffAdapter.Update(lookupObj.Id, tariffObj)
 	}
 	return nil
+}
+
+func (svc *mappingService) updateHardware(mi *MappingInstruction, file *excelize.File, identifierValue string, idType string, row int, sh string) ([]*hardware.HardwareCRUD, *Error) {
+	// uhList übergeben und wieder zurückgeben
+	var err error
+	var hardwareList []*hardware.HardwareLookup
+
+	// analog zu tariff mehrere hardwareCRUD möglich
+	switch idType {
+	case "ebootisId":
+		hardwareList, err = svc.hardwareAdapter.List(settings.Option{Name: "variants.ebootis_id", Value: identifierValue})
+	case "externalArticleNumber":
+		hardwareList, err = svc.hardwareAdapter.List(settings.Option{Name: "variants.external_articlenumber", Value: identifierValue})
+	}
+	log.Error(err)
+	if err != nil {
+		return nil, &Error{
+			ErrTitle: "Identifizierungs-Fehler",
+			ErrMsg:   fmt.Sprintf("Fehler in Zeile %d. Es konnten keine Hardware mit dem Identifikator '%s' ermittelt werden", row, identifierValue),
+		}
+	}
+
+	hardwareObj, err := svc.hardwareAdapter.Read(hardwareList[0].Id)
+	if err != nil {
+		return nil, &Error{
+			ErrTitle: "Identifizierungs-Fehler",
+			ErrMsg:   fmt.Sprintf("Fehler in Zeile %d. Es konnten keine Hardware mit dem Identifikator '%s' ermittelt werden", row, identifierValue),
+		}
+	}
+
+	for _, inst := range mi.Mapping {
+		coords, err := excelize.CoordinatesToCellName(inst.ColIndex, row)
+		if err != nil {
+			return nil, &Error{
+				ErrTitle: "Koordinatenfehler",
+				ErrMsg:   fmt.Sprintf("Fehler in Zeile %d, Spalte %d. Es die dazugehörige Excel-Koordinate konnte nicht konvertiert werden", row, inst.ColIndex),
+			}
+		}
+		cellVal, err := file.GetCellValue(sh, coords)
+		if err != nil {
+			return nil, &Error{
+				ErrTitle: "Lesefehler",
+				ErrMsg:   fmt.Sprintf("Wert der Zelle %s konnte nicht ausgelesen werden", coords),
+			}
+		}
+
+		switch inst.MappingValue {
+		case "manufactWkz":
+			writeOptionArr(hardwareObj.Wkz, "manufacturer", cellVal)
+		case "ek24Wkz":
+			writeOptionArr(hardwareObj.Wkz, "ek24", cellVal)
+		case "price":
+			// todo: switch case ebootis/article
+			// ebootisid Fall
+			if variant, ok := hardwareObj.Variant(idType); ok {
+				variant.Price, _ = getPeriodFloat(cellVal)
+			}
+			// articlenr
+			if variant, ok := hardwareObj.VariantViaArticleNo(idType); ok { // added method
+				variant.Price, _ = getPeriodFloat(cellVal)
+			}
+
+		}
+	}
+	return hardwareObj, nil
 }
 
 func writeOptionArr(arr []*product.Option, key string, cellVal string) []*product.Option {
