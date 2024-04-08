@@ -237,7 +237,6 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 
 		idCoords, err := excelize.CoordinatesToCellName(idCol, row)
 		if err != nil {
-			// TODO: Adjustments necessary. Skip and log row when error occurs
 			result.FailedRows = append(result.FailedRows, Error{
 				ErrTitle: "Koordinatenfehler",
 				ErrMsg:   fmt.Sprintf("Identifikationskoordinate konnte in Zeile %v nicht in Zellname umgewandelt werden", row),
@@ -246,7 +245,6 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 		}
 		identifierValue, err := file.GetCellValue(sh, idCoords)
 		if err != nil {
-			// TODO: Adjustments necessary. Skip and log row when error occurs
 			result.FailedRows = append(result.FailedRows, Error{
 				ErrTitle: "Zellen-Lesefehler",
 				ErrMsg:   fmt.Sprintf("Der Zelleninhalt der Zelle %s konnte nicht gelesen werden", idCoords),
@@ -272,7 +270,7 @@ func (svc *mappingService) updateTariff(mi *MappingInstruction, file *excelize.F
 	if err != nil {
 		return &Error{
 			ErrTitle: "Identifizierungs-Fehler",
-			ErrMsg:   fmt.Sprintf("Es konnten keine Tarifobjekte mit der EbootisId '%s' ermittelt werden", identifierValue),
+			ErrMsg:   fmt.Sprintf("Fehler in Zeile %d. Es konnten keine Tarifobjekte mit der EbootisId '%s' ermittelt werden", row, identifierValue),
 		}
 	}
 	for _, lookupObj := range listResult {
@@ -281,7 +279,7 @@ func (svc *mappingService) updateTariff(mi *MappingInstruction, file *excelize.F
 		if err != nil {
 			return &Error{
 				ErrTitle: "Identifizierungs-Fehler",
-				ErrMsg:   fmt.Sprintf("Es konnten kein Tarifobjekt mit der id %s ermittelt werden.", lookupObj.Id),
+				ErrMsg:   fmt.Sprintf("Fehler in Zeile %d. Es konnten kein Tarifobjekt mit der Id %s ermittelt werden.", row, lookupObj.Id),
 			}
 		}
 
@@ -289,8 +287,20 @@ func (svc *mappingService) updateTariff(mi *MappingInstruction, file *excelize.F
 		copy(highlightArr, tariffObj.Highlights)
 
 		for _, inst := range mi.Mapping {
-			coords, _ := excelize.CoordinatesToCellName(inst.ColIndex, row)
-			cellVal, _ := file.GetCellValue(sh, coords)
+			coords, err := excelize.CoordinatesToCellName(inst.ColIndex, row)
+			if err != nil {
+				return &Error{
+					ErrTitle: "Koordinatenfehler",
+					ErrMsg:   fmt.Sprintf("Fehler in Zeile %d, Spalte %d. Es die dazugehörige Excel-Koordinate konnte nicht konvertiert werden", row, inst.ColIndex),
+				}
+			}
+			cellVal, err := file.GetCellValue(sh, coords)
+			if err != nil {
+				return &Error{
+					ErrTitle: "Lesefehler",
+					ErrMsg:   fmt.Sprintf("Wert der Zelle %s konnte nicht ausgelesen werden", coords),
+				}
+			}
 
 			switch inst.MappingValue {
 			case "basicCharge":
