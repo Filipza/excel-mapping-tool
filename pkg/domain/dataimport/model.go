@@ -3,6 +3,8 @@ package dataimport
 import (
 	"fmt"
 	"io"
+
+	"github.com/Filipza/excel-mapping-tool/internal/domain/v1/hardware"
 )
 
 // Contains file and type of import
@@ -37,6 +39,11 @@ type MappingResult struct {
 	FailedRows       []Error
 }
 
+type editedCRUDobj struct {
+	hardwareCRUD *hardware.HardwareCRUD
+	hasError     bool
+}
+
 type Error struct {
 	ErrTitle string
 	ErrMsg   string
@@ -47,7 +54,7 @@ func (err *Error) Error() string {
 }
 
 // Returns according column index and identifier type (ebootisId or externalArticleNumber) if either is found.
-// Returns false, 0 and "" if none identifier is found.
+// Returns false, 0 and "" if no identifier found.
 func (mi *MappingInstruction) GetIdentifierIndex() (exists bool, idIndex int, idType string) {
 	for i, m := range mi.Mapping {
 		switch m.MappingValue {

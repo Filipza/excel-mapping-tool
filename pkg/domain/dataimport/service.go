@@ -73,11 +73,12 @@ var DROPDOWN_OPTIONS = map[string]map[string]string{
 }
 
 func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
+	// assign Uuid in case of e.g cli/standalone application upload
 	if ud.Uuid == "" {
 		ud.Uuid = uuid.New().String()
 	}
 
-	// creation of dir named after uuid
+	// creation of dir in linux temp folder named after uuid
 	dirPath := "/tmp/" + ud.Uuid + "/"
 
 	err := os.MkdirAll(dirPath, 0755)
@@ -106,7 +107,7 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 
 	file, err := excelize.OpenReader(ud.UploadedFile)
 	if err != nil {
-		// errorf schreiben wo ich mich befinde
+		//TODO: errorf schreiben wo im code ich mich befinde
 		log.Error(err)
 		return nil, &Error{
 			ErrTitle: "Parsingfehler",
@@ -187,13 +188,14 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 }
 
 func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult, error) {
+	// todo: close active cleanup channel
 	result := &MappingResult{}
 
-	type hwUpdate struct {
+	type HwUpdate struct {
 		hwCRUD *hardware.HardwareCRUD
 		isSucc bool
 	}
-	var hwUpdateArr []*hwUpdate
+	var hwUpdateArr []*HwUpdate
 
 	exists, idIndex, idType := mi.GetIdentifierIndex()
 	idCol := idIndex + 1
@@ -225,6 +227,7 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 
 	sh := sheetLists[0]
 	rows, _ := file.Rows(sh)
+	// uhList := make([]*hardware.HardwareCRUD, 0) // init Array with updated HardwareCRUD objects to prevent multiple hwCRUD calls
 
 	for row := 1; rows.Next(); row++ {
 
@@ -248,16 +251,18 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 			})
 			continue
 		}
+
+		editedCRUDmap := make(map[string]*editedCRUDobj)
+
 		var updateErr *Error
-		// uhList := make([]*hardware.HardwareCRUD, 0) // init Array with updated HardwareCRUD objects to prevent multiple hwCRUD calls
 
 		switch mi.UploadType {
 		case "tariff":
 			updateErr = svc.updateTariff(mi, file, identifierValue, row, sh)
 		case "hardware":
-			var uh []*hardware.HardwareCRUD
-			uh, updateErr = svc.updateHardware(mi, file, identifierValue, idType, row, sh)
-			// Wie hardwareCRUD updaten, wenn bereits vorhanden? Wird von jedem "neuen" updateErr mit alten hardwareCRUD-Werten überschrieben
+			editedCRUDmap, updateErr = svc.updateHardware(mi, file, identifierValue, idType, row, sh, editedCRUDmap)
+			// map mit [id]*objekt{hardware, flag ob fehler bereits aufgetreten} an func übergeben und zurückgeben
+			// auf id überprüfen, ob hardwareCRUD bereits bearbeitet und in map
 
 			// case "stocks":
 			// updateErr = svc.updateStocks()
@@ -275,6 +280,8 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 		// ! hier Varianten in hardwareCRUD schreiben
 		// writeHardware(uhList)
 	}
+
+	// TODO: cleanup func
 	return result, err
 }
 
@@ -384,18 +391,17 @@ func (svc *mappingService) updateTariff(mi *MappingInstruction, file *excelize.F
 	return nil
 }
 
-func (svc *mappingService) updateHardware(mi *MappingInstruction, file *excelize.File, identifierValue string, idType string, row int, sh string) ([]*hardware.HardwareCRUD, *Error) {
-	// uhList übergeben und wieder zurückgeben
+func (svc *mappingService) updateHardware(mi *MappingInstruction, file *excelize.File, identifierValue string, idType string, row int, sh string, eom map[string]*editedCRUDobj) ([]*hardware.HardwareCRUD, *Error) {
 	var err error
-	var hardwareList []*hardware.HardwareLookup
+	var hardwareLookupList []*hardware.HardwareLookup
 
-	// analog zu tariff mehrere hardwareCRUD möglich
 	switch idType {
 	case "ebootisId":
-		hardwareList, err = svc.hardwareAdapter.List(settings.Option{Name: "variants.ebootis_id", Value: identifierValue})
+		hardwareLookupList, err = svc.hardwareAdapter.List(settings.Option{Name: "variants.ebootis_id", Value: identifierValue})
 	case "externalArticleNumber":
-		hardwareList, err = svc.hardwareAdapter.List(settings.Option{Name: "variants.external_articlenumber", Value: identifierValue})
+		hardwareLookupList, err = svc.hardwareAdapter.List(settings.Option{Name: "variants.external_articlenumber", Value: identifierValue})
 	}
+
 	log.Error(err)
 	if err != nil {
 		return nil, &Error{
@@ -404,49 +410,67 @@ func (svc *mappingService) updateHardware(mi *MappingInstruction, file *excelize
 		}
 	}
 
-	hardwareObj, err := svc.hardwareAdapter.Read(hardwareList[0].Id)
-	if err != nil {
-		return nil, &Error{
-			ErrTitle: "Identifizierungs-Fehler",
-			ErrMsg:   fmt.Sprintf("Fehler in Zeile %d. Es konnten keine Hardware mit dem Identifikator '%s' ermittelt werden", row, identifierValue),
+	for _, listResult := range hardwareLookupList {
+		// todo hardware schon bearbeitet?
+		hardwareObj, err := svc.hardwareAdapter.Read(listResult.Id)
+		if err != nil {
+			//TODO: eher continue, da noch weitere varianten geschrieben werden müssen?
+			return nil, &Error{
+				ErrTitle: "Identifizierungs-Fehler",
+				ErrMsg:   fmt.Sprintf("Fehler in Zeile %d. Es konnten keine Hardware mit dem Identifikator '%s' ermittelt werden", row, identifierValue),
+			}
 		}
+
+		for _, inst := range mi.Mapping {
+			coords, err := excelize.CoordinatesToCellName(inst.ColIndex, row)
+			if err != nil {
+				return nil, &Error{
+					ErrTitle: "Koordinatenfehler",
+					ErrMsg:   fmt.Sprintf("Fehler in Zeile %d, Spalte %d. Es die dazugehörige Excel-Koordinate konnte nicht konvertiert werden", row, inst.ColIndex),
+				}
+			}
+			cellVal, err := file.GetCellValue(sh, coords)
+			if err != nil {
+				return nil, &Error{
+					ErrTitle: "Lesefehler",
+					ErrMsg:   fmt.Sprintf("Wert der Zelle %s konnte nicht ausgelesen werden", coords),
+				}
+			}
+
+			switch inst.MappingValue {
+			case "manufactWkz":
+				writeOptionArr(hardwareObj.Wkz, "manufacturer", cellVal)
+			case "ek24Wkz":
+				writeOptionArr(hardwareObj.Wkz, "ek24", cellVal)
+			case "price":
+				switch idType {
+				case "ebootisId":
+					if variant, ok := hardwareObj.Variant(idType); ok {
+						variant.Price, _ = getPeriodFloat(cellVal)
+						continue
+					}
+					//TODO: eher continue, da noch weitere varianten geschrieben werden müssen?
+					return nil, &Error{
+						ErrTitle: "Variante unbekannt",
+						ErrMsg:   fmt.Sprintf("Es konnte keine Variante mit der Ebootis-ID %s gefunden werden", cellVal),
+					}
+				case "externalArticleNumber":
+					if variant, ok := hardwareObj.VariantViaArticleNo(idType); ok { // added method from project
+						variant.Price, _ = getPeriodFloat(cellVal)
+						continue
+					}
+					return nil, &Error{
+						ErrTitle: "Variante unbekannt",
+						ErrMsg:   fmt.Sprintf("Es konnte keine Variante mit der MSD Artikelnummer %s gefunden werden", cellVal),
+					}
+				}
+			}
+
+		}
+
 	}
 
-	for _, inst := range mi.Mapping {
-		coords, err := excelize.CoordinatesToCellName(inst.ColIndex, row)
-		if err != nil {
-			return nil, &Error{
-				ErrTitle: "Koordinatenfehler",
-				ErrMsg:   fmt.Sprintf("Fehler in Zeile %d, Spalte %d. Es die dazugehörige Excel-Koordinate konnte nicht konvertiert werden", row, inst.ColIndex),
-			}
-		}
-		cellVal, err := file.GetCellValue(sh, coords)
-		if err != nil {
-			return nil, &Error{
-				ErrTitle: "Lesefehler",
-				ErrMsg:   fmt.Sprintf("Wert der Zelle %s konnte nicht ausgelesen werden", coords),
-			}
-		}
-
-		switch inst.MappingValue {
-		case "manufactWkz":
-			writeOptionArr(hardwareObj.Wkz, "manufacturer", cellVal)
-		case "ek24Wkz":
-			writeOptionArr(hardwareObj.Wkz, "ek24", cellVal)
-		case "price":
-			// todo: switch case ebootis/article
-			// ebootisid Fall
-			if variant, ok := hardwareObj.Variant(idType); ok {
-				variant.Price, _ = getPeriodFloat(cellVal)
-			}
-			// articlenr
-			if variant, ok := hardwareObj.VariantViaArticleNo(idType); ok { // added method
-				variant.Price, _ = getPeriodFloat(cellVal)
-			}
-
-		}
-	}
-	return hardwareObj, nil
+	return nil, nil
 }
 
 func writeOptionArr(arr []*product.Option, key string, cellVal string) []*product.Option {
