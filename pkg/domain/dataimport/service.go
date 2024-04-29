@@ -19,18 +19,6 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
-type MappingService interface {
-	ReadFile(UploadData) (MappingOptions, error)
-	WriteMapping(MappingInstruction) (MappingResult, error) // kann ich hier nicht direkt den custom Error type nutzen oder spricht was dagegen?
-}
-
-type mappingService struct {
-	chanMap         sync.Map
-	tariffAdapter   crud.CRUDService[tariff.TariffCRUD, tariff.TariffLookup]
-	hardwareAdapter crud.CRUDService[hardware.HardwareCRUD, hardware.HardwareLookup]
-	// variantAdapter  crud.CRUDService[hardware.VariantCRUD, hardware.VariantLookup]
-}
-
 var DROPDOWN_OPTIONS = map[string]map[string]string{
 	"tariff": {
 		"ebootisId":          "EbootisId",
@@ -72,6 +60,22 @@ var DROPDOWN_OPTIONS = map[string]map[string]string{
 	},
 }
 
+type MappingService interface {
+	ReadFile(*UploadData) (*MappingOptions, error)
+	WriteMapping(*MappingInstruction) (*MappingResult, error) // kann ich hier nicht direkt den custom Error type nutzen oder spricht was dagegen?
+}
+
+type mappingService struct {
+	chanMap         sync.Map
+	tariffAdapter   crud.CRUDService[tariff.TariffCRUD, tariff.TariffLookup]
+	hardwareAdapter crud.CRUDService[hardware.HardwareCRUD, hardware.HardwareLookup]
+	// variantAdapter  crud.CRUDService[hardware.VariantCRUD, hardware.VariantLookup]
+}
+
+func NewMappingService(tariffAdapter crud.CRUDService[tariff.TariffCRUD, tariff.TariffLookup], hardwareAdapter crud.CRUDService[hardware.HardwareCRUD, hardware.HardwareLookup]) MappingService {
+	return &mappingService{tariffAdapter: tariffAdapter, hardwareAdapter: hardwareAdapter}
+}
+
 func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 	// assign Uuid in case of e.g cli/standalone application upload
 	if ud.Uuid == "" {
@@ -89,7 +93,6 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 		}
 	}
 
-	// TODO: Write tests for goroutine/channels
 	// removal of dir after timeout
 	cleanupCh := make(chan bool)
 	svc.chanMap.Store(ud.Uuid, cleanupCh)
@@ -188,14 +191,28 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 }
 
 func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult, error) {
-	// todo: close active cleanup channel
-	result := &MappingResult{}
+	var err error
+	// TODO: WIE BEKOMME ICH DEN ERROR DIREKT AUS DER FUNC ZUGEWIESEN WENN DEFERED?
+	defer func() error {
+		err := os.RemoveAll("/tmp/" + mi.Uuid + "/")
+		return err
+	}()
 
-	type HwUpdate struct {
-		hwCRUD *hardware.HardwareCRUD
-		isSucc bool
+	if err != nil {
+		return nil, &Error{
+			ErrTitle: "Bereinigungsfehler",
+			ErrMsg:   "Fehler beim Bereinigen der geschriebenen Daten.",
+		}
 	}
-	var hwUpdateArr []*HwUpdate
+
+	if cancelInfo, ok := svc.chanMap.Load(mi.Uuid); ok {
+		// send signal to cancel the cleanup routine
+		if cancelChan, ok := cancelInfo.(chan bool); ok {
+			cancelChan <- true
+		}
+	}
+
+	result := &MappingResult{}
 
 	exists, idIndex, idType := mi.GetIdentifierIndex()
 	idCol := idIndex + 1
@@ -225,9 +242,10 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 		}
 	}
 
+	editedCRUDmap := make(map[string]*editedCRUDobj)
+
 	sh := sheetLists[0]
 	rows, _ := file.Rows(sh)
-	// uhList := make([]*hardware.HardwareCRUD, 0) // init Array with updated HardwareCRUD objects to prevent multiple hwCRUD calls
 
 	for row := 1; rows.Next(); row++ {
 
@@ -252,17 +270,13 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 			continue
 		}
 
-		editedCRUDmap := make(map[string]*editedCRUDobj)
-
 		var updateErr *Error
 
 		switch mi.UploadType {
 		case "tariff":
 			updateErr = svc.updateTariff(mi, file, identifierValue, row, sh)
 		case "hardware":
-			editedCRUDmap, updateErr = svc.updateHardware(mi, file, identifierValue, idType, row, sh, editedCRUDmap)
-			// map mit [id]*objekt{hardware, flag ob fehler bereits aufgetreten} an func übergeben und zurückgeben
-			// auf id überprüfen, ob hardwareCRUD bereits bearbeitet und in map
+			updateErr = svc.updateHardware(mi, file, identifierValue, idType, row, sh, editedCRUDmap)
 
 			// case "stocks":
 			// updateErr = svc.updateStocks()
@@ -274,14 +288,21 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 			continue
 		}
 		result.SuccessfulRows++
-
-	}
-	if len(hwUpdateArr) > 0 {
-		// ! hier Varianten in hardwareCRUD schreiben
-		// writeHardware(uhList)
 	}
 
-	// TODO: cleanup func
+	if len(editedCRUDmap) > 0 {
+		for _, v := range editedCRUDmap {
+			if !v.hasError {
+				if _, err := svc.hardwareAdapter.Update(v.hardwareCRUD.Id, v.hardwareCRUD); err != nil {
+					result.FailedRows = append(result.FailedRows, Error{
+						ErrTitle: "Hardware Speicherfehler",
+						ErrMsg:   fmt.Sprintf("Update von Eardware %s konnte nicht durchgeführt werden", v.hardwareCRUD.Id),
+					})
+				}
+			}
+		}
+	}
+
 	return result, err
 }
 
@@ -391,7 +412,7 @@ func (svc *mappingService) updateTariff(mi *MappingInstruction, file *excelize.F
 	return nil
 }
 
-func (svc *mappingService) updateHardware(mi *MappingInstruction, file *excelize.File, identifierValue string, idType string, row int, sh string, eom map[string]*editedCRUDobj) ([]*hardware.HardwareCRUD, *Error) {
+func (svc *mappingService) updateHardware(mi *MappingInstruction, file *excelize.File, identifierValue string, idType string, row int, sh string, editedCRUDmap map[string]*editedCRUDobj) *Error {
 	var err error
 	var hardwareLookupList []*hardware.HardwareLookup
 
@@ -404,34 +425,46 @@ func (svc *mappingService) updateHardware(mi *MappingInstruction, file *excelize
 
 	log.Error(err)
 	if err != nil {
-		return nil, &Error{
+		return &Error{
 			ErrTitle: "Identifizierungs-Fehler",
 			ErrMsg:   fmt.Sprintf("Fehler in Zeile %d. Es konnten keine Hardware mit dem Identifikator '%s' ermittelt werden", row, identifierValue),
 		}
 	}
 
 	for _, listResult := range hardwareLookupList {
-		// todo hardware schon bearbeitet?
-		hardwareObj, err := svc.hardwareAdapter.Read(listResult.Id)
-		if err != nil {
-			//TODO: eher continue, da noch weitere varianten geschrieben werden müssen?
-			return nil, &Error{
-				ErrTitle: "Identifizierungs-Fehler",
-				ErrMsg:   fmt.Sprintf("Fehler in Zeile %d. Es konnten keine Hardware mit dem Identifikator '%s' ermittelt werden", row, identifierValue),
+		var hardwareObj *editedCRUDobj
+
+		// check if hardwareCRUD already in editedCRUDmap to prevent unecessary calls to hardwareAdapter
+		// insert into editedCRUDmap if not present
+		if _, ok := editedCRUDmap[listResult.Id]; !ok {
+			readObj, err := svc.hardwareAdapter.Read(listResult.Id)
+			if err != nil {
+				return &Error{
+					ErrTitle: "Identifizierungs-Fehler",
+					ErrMsg:   fmt.Sprintf("Fehler in Zeile %d. Es konnten keine Hardware mit dem Identifikator '%s' ermittelt werden", row, identifierValue),
+				}
 			}
+
+			hardwareObj = &editedCRUDobj{readObj, false}
+			// add editedCRUDobj to editedCRUDmap if not present
+			editedCRUDmap[listResult.Id] = hardwareObj
+		} else {
+			hardwareObj = editedCRUDmap[listResult.Id]
 		}
 
 		for _, inst := range mi.Mapping {
 			coords, err := excelize.CoordinatesToCellName(inst.ColIndex, row)
 			if err != nil {
-				return nil, &Error{
+				hardwareObj.hasError = true
+				return &Error{
 					ErrTitle: "Koordinatenfehler",
 					ErrMsg:   fmt.Sprintf("Fehler in Zeile %d, Spalte %d. Es die dazugehörige Excel-Koordinate konnte nicht konvertiert werden", row, inst.ColIndex),
 				}
 			}
 			cellVal, err := file.GetCellValue(sh, coords)
 			if err != nil {
-				return nil, &Error{
+				hardwareObj.hasError = true
+				return &Error{
 					ErrTitle: "Lesefehler",
 					ErrMsg:   fmt.Sprintf("Wert der Zelle %s konnte nicht ausgelesen werden", coords),
 				}
@@ -439,27 +472,28 @@ func (svc *mappingService) updateHardware(mi *MappingInstruction, file *excelize
 
 			switch inst.MappingValue {
 			case "manufactWkz":
-				writeOptionArr(hardwareObj.Wkz, "manufacturer", cellVal)
+				hardwareObj.hardwareCRUD.Wkz = writeOptionArr(hardwareObj.hardwareCRUD.Wkz, "manufacturer", cellVal)
 			case "ek24Wkz":
-				writeOptionArr(hardwareObj.Wkz, "ek24", cellVal)
+				hardwareObj.hardwareCRUD.Wkz = writeOptionArr(hardwareObj.hardwareCRUD.Wkz, "ek24", cellVal)
 			case "price":
 				switch idType {
 				case "ebootisId":
-					if variant, ok := hardwareObj.Variant(idType); ok {
+					if variant, ok := hardwareObj.hardwareCRUD.Variant(identifierValue); ok {
 						variant.Price, _ = getPeriodFloat(cellVal)
 						continue
 					}
-					//TODO: eher continue, da noch weitere varianten geschrieben werden müssen?
-					return nil, &Error{
+					hardwareObj.hasError = true
+					return &Error{
 						ErrTitle: "Variante unbekannt",
 						ErrMsg:   fmt.Sprintf("Es konnte keine Variante mit der Ebootis-ID %s gefunden werden", cellVal),
 					}
 				case "externalArticleNumber":
-					if variant, ok := hardwareObj.VariantViaArticleNo(idType); ok { // added method from project
+					if variant, ok := hardwareObj.hardwareCRUD.VariantViaArticleNo(idType); ok { // added method from project
 						variant.Price, _ = getPeriodFloat(cellVal)
 						continue
 					}
-					return nil, &Error{
+					hardwareObj.hasError = true
+					return &Error{
 						ErrTitle: "Variante unbekannt",
 						ErrMsg:   fmt.Sprintf("Es konnte keine Variante mit der MSD Artikelnummer %s gefunden werden", cellVal),
 					}
@@ -470,7 +504,7 @@ func (svc *mappingService) updateHardware(mi *MappingInstruction, file *excelize
 
 	}
 
-	return nil, nil
+	return nil
 }
 
 func writeOptionArr(arr []*product.Option, key string, cellVal string) []*product.Option {

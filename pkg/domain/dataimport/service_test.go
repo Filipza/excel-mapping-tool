@@ -277,66 +277,62 @@ func TestWriteMappingGetIdentifierNegative(t *testing.T) {
 	assert.Error(t, err, "MappingInstruction should contain either 'EbootisID' or 'externalArticleNumber' as MappingValue")
 }
 
-// func TestWriteMappingOpenXlsxNegative(t *testing.T) {
+func TestWriteMappingOpenXlsxNegative(t *testing.T) {
 
-// 	// file, err := os.ReadFile("../../../test/positive.xlsx")
-// 	// if err != nil {
-// 	// 	t.Fatalf("Loading test .xlsx failed: %v", err)
-// 	// }
+	file, err := os.ReadFile("../../../test/positive.xlsx")
+	if err != nil {
+		t.Fatalf("Loading test .xlsx failed: %v", err)
+	}
 
-// 	// mockUploadData := &UploadData{
-// 	// 	UploadedFile: bytes.NewReader(file),
-// 	// 	UploadType:   "stocks",
-// 	// }
+	mockUploadData := &UploadData{
+		UploadedFile: bytes.NewReader(file),
+		UploadType:   "stocks",
+	}
 
-// 	svc := mappingService{}
+	svc := mappingService{}
 
-// 	// result, err := svc.ReadFile(mockUploadData)
+	svc.ReadFile(mockUploadData)
 
-// 	mi := &MappingInstruction{
-// 		Uuid: "8cae326f-d3de-45d4-8bb8-ded181f44a0e",
-// 		Mapping: []MappingObject{
-// 			{Index: 0, MappingValue: "pibUrl"},
-// 			{Index: 1, MappingValue: "wkz"},
-// 		},
-// 	}
+	mi := &MappingInstruction{
+		Uuid: "8cae326f-d3de-45d4-8bb8-ded181f44a0e",
+		Mapping: []MappingObject{
+			{ColIndex: 0, MappingValue: "pibUrl"},
+			{ColIndex: 1, MappingValue: "wkz"},
+		},
+	}
 
-// 	_, err := svc.WriteMapping(mi)
+	_, err = svc.WriteMapping(mi)
 
-// 	assert.NoError(t, err, "function should not return an error")
-// }
+	assert.NoError(t, err, "function should not return an error")
+}
 
-// func TestWriteMapping(t *testing.T) {
+func TestWriteMapping(t *testing.T) {
 
-// 	file, err := os.ReadFile("../../../test/positive.xlsx")
-// 	if err != nil {
-// 		t.Fatalf("Loading test .xlsx failed: %v", err)
-// 	}
+	file, err := os.ReadFile("../../../test/positive.xlsx")
+	if err != nil {
+		t.Fatalf("Loading test .xlsx failed: %v", err)
+	}
 
-// 	mockUploadData := &UploadData{
-// 		UploadedFile: bytes.NewReader(file),
-// 		UploadType:   "stocks",
-// 	}
+	mockUploadData := &UploadData{
+		UploadedFile: bytes.NewReader(file),
+		UploadType:   "stocks",
+	}
 
-// 	svc := mappingService{}
+	svc := mappingService{}
 
-// 	result, err := svc.ReadFile(mockUploadData)
+	result, err := svc.ReadFile(mockUploadData)
 
-// 	mi := &MappingInstruction{
-// 		Uuid: result.Uuid,
-// 		Mapping: []MappingObject{
-// 			{ColIndex: 0, MappingValue: "ebootisId"},
-// 			{ColIndex: 1, MappingValue: "externalArticleNumber"},
-// 			{ColIndex: 2, MappingValue: "pibUrl"},
-// 			{ColIndex: 3, MappingValue: "wkz"},
-// 		},
-// 	}
+	mi := &MappingInstruction{
+		Uuid: result.Uuid,
+		Mapping: []MappingObject{
+			{ColIndex: 0, MappingValue: "ebootisId"},
+			{ColIndex: 1, MappingValue: "externalArticleNumber"},
+			{ColIndex: 2, MappingValue: "pibUrl"},
+			{ColIndex: 3, MappingValue: "wkz"},
+		},
+	}
 
-// 	svc.WriteMapping(mi)
+	svc.WriteMapping(mi)
 
-// 	assert.NoError(t, err, "function should not return an error")
-// }
-
-// func TestAbortDeletionChannel(t *testing.T) {
-// TODO
-// }
+	assert.NoError(t, err, "function should not return an error")
+}
