@@ -62,14 +62,13 @@ var DROPDOWN_OPTIONS = map[string]map[string]string{
 
 type MappingService interface {
 	ReadFile(*UploadData) (*MappingOptions, error)
-	WriteMapping(*MappingInstruction) (*MappingResult, error) // kann ich hier nicht direkt den custom Error type nutzen oder spricht was dagegen?
+	WriteMapping(*MappingInstruction) (*MappingResult, error)
 }
 
 type mappingService struct {
 	chanMap         sync.Map
 	tariffAdapter   crud.CRUDService[tariff.TariffCRUD, tariff.TariffLookup]
 	hardwareAdapter crud.CRUDService[hardware.HardwareCRUD, hardware.HardwareLookup]
-	// variantAdapter  crud.CRUDService[hardware.VariantCRUD, hardware.VariantLookup]
 }
 
 func NewMappingService(tariffAdapter crud.CRUDService[tariff.TariffCRUD, tariff.TariffLookup], hardwareAdapter crud.CRUDService[hardware.HardwareCRUD, hardware.HardwareLookup]) MappingService {
@@ -77,14 +76,13 @@ func NewMappingService(tariffAdapter crud.CRUDService[tariff.TariffCRUD, tariff.
 }
 
 func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
-	// assign Uuid in case of e.g cli/standalone application upload
+	// Assign Uuid in case of e.g cli/standalone application upload
 	if ud.Uuid == "" {
 		ud.Uuid = uuid.New().String()
 	}
 
-	// creation of dir in linux temp folder named after uuid
+	// Creation of dir in linux temp folder named after uuid
 	dirPath := "/tmp/" + ud.Uuid + "/"
-
 	err := os.MkdirAll(dirPath, 0755)
 	if err != nil {
 		return nil, &Error{
@@ -93,7 +91,7 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 		}
 	}
 
-	// removal of dir after timeout
+	// Removal of dir after timeout. Cancelled as soon as writeMapping() starts
 	cleanupCh := make(chan bool)
 	svc.chanMap.Store(ud.Uuid, cleanupCh)
 
@@ -110,7 +108,6 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 
 	file, err := excelize.OpenReader(ud.UploadedFile)
 	if err != nil {
-		//TODO: errorf schreiben wo im code ich mich befinde
 		log.Error(err)
 		return nil, &Error{
 			ErrTitle: "Parsingfehler",
@@ -134,6 +131,7 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 	}
 
 	var exists bool
+	// Check if UploadType exists in available dropdown options
 	mappingOptions.DropdownOptions, exists = DROPDOWN_OPTIONS[ud.UploadType]
 	if !exists {
 		return nil, &Error{
@@ -191,29 +189,30 @@ func (svc *mappingService) ReadFile(ud *UploadData) (*MappingOptions, error) {
 }
 
 func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult, error) {
-	var err error
-	// TODO: WIE BEKOMME ICH DEN ERROR DIREKT AUS DER FUNC ZUGEWIESEN WENN DEFERED?
-	defer func() error {
-		err := os.RemoveAll("/tmp/" + mi.Uuid + "/")
-		return err
-	}()
+	// Remove uploaded/generated files
+	defer os.RemoveAll("/tmp/" + mi.Uuid + "/")
 
-	if err != nil {
-		return nil, &Error{
-			ErrTitle: "Bereinigungsfehler",
-			ErrMsg:   "Fehler beim Bereinigen der geschriebenen Daten.",
-		}
-	}
-
+	// Send signal to cancel the cleanup routine
 	if cancelInfo, ok := svc.chanMap.Load(mi.Uuid); ok {
-		// send signal to cancel the cleanup routine
 		if cancelChan, ok := cancelInfo.(chan bool); ok {
 			cancelChan <- true
 		}
 	}
 
+	// Check if upload type valid
+	switch mi.UploadType {
+	case "tariff", "hardware":
+		break
+	default:
+		return nil, &Error{
+			ErrTitle: "Ungültiger Uploadtype",
+			ErrMsg:   "Der übergebene Uploadtyp '%s' ist ungültig.",
+		}
+	}
+
 	result := &MappingResult{}
 
+	// Check if identifier exists and get according column index + type (ebootisId or externalArticleNo)
 	exists, idIndex, idType := mi.GetIdentifierIndex()
 	idCol := idIndex + 1
 
@@ -250,7 +249,7 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 	for row := 1; rows.Next(); row++ {
 
 		if row == 1 {
-			continue // skips header row
+			continue // Skip header row
 		}
 
 		idCoords, err := excelize.CoordinatesToCellName(idCol, row)
@@ -277,9 +276,6 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 			updateErr = svc.updateTariff(mi, file, identifierValue, row, sh)
 		case "hardware":
 			updateErr = svc.updateHardware(mi, file, identifierValue, idType, row, sh, editedCRUDmap)
-
-			// case "stocks":
-			// updateErr = svc.updateStocks()
 		}
 
 		if updateErr != nil {
@@ -293,6 +289,7 @@ func (svc *mappingService) WriteMapping(mi *MappingInstruction) (*MappingResult,
 	if len(editedCRUDmap) > 0 {
 		for _, v := range editedCRUDmap {
 			if !v.hasError {
+				// Write into db
 				if _, err := svc.hardwareAdapter.Update(v.hardwareCRUD.Id, v.hardwareCRUD); err != nil {
 					result.FailedRows = append(result.FailedRows, Error{
 						ErrTitle: "Hardware Speicherfehler",
@@ -352,9 +349,7 @@ func (svc *mappingService) updateTariff(mi *MappingInstruction, file *excelize.F
 					tariffObj.PricingIntervals[0].Price, _ = getPeriodFloat(cellVal)
 				}
 
-				// ! writebullet für tariff_monthly_price > problem, da in tariff_monthly_price auch
-				// ! strings wie "34.99€ (ab dem 13. Monat 69.99€)" stehen
-				// Klärung mit Produktmanagement. Siehe Notizen
+				// TODO: writebullet für tariff_monthly_price > problem, da in tariff_monthly_price auch strings wie "34.99€ (ab dem 13. Monat 69.99€)" stehen
 				cellVal += " €"
 				tariffObj.Bullets = writeOptionArr(tariffObj.Bullets, "tariff_monthly_price", cellVal)
 			case "basicChargeRenewal":
@@ -372,7 +367,7 @@ func (svc *mappingService) updateTariff(mi *MappingInstruction, file *excelize.F
 			case "connectionFee":
 				tariffObj.ConnectionFee, _ = getPeriodFloat(cellVal)
 
-				cellVal += " €" // TODO: Produktmanagement nahebringen
+				cellVal += " €" // ! Produktmanagement über Funktionsweise unterrichten
 				tariffObj.Bullets = writeOptionArr(tariffObj.Bullets, "tariff_connection_fee", cellVal)
 			case "dataVolume":
 				tariffObj.DataVolume, _ = getPeriodFloat(cellVal)
@@ -381,11 +376,11 @@ func (svc *mappingService) updateTariff(mi *MappingInstruction, file *excelize.F
 			case "pibLink":
 				tariffObj.PibLink = cellVal
 			case "highlight1", "highlight2", "highlight3", "highlight4", "highlight5":
-				// Extracts last digit of "highlightx" key, to get array index
+				// Extract last digit of "highlightx" key, to get array index
 				lastdigit := int(inst.MappingValue[len(inst.MappingValue)-1]) - '0'
 				highlightArr[lastdigit-1] = cellVal
 			case "bullet1", "bullet2", "bullet3", "bullet4", "bullet5", "bullet6":
-				// Extracts last digit of "bulletx" key, to get according "tariff_inclusive_benefitsx" key
+				// Extract last digit of "bulletx" key, to get according "tariff_inclusive_benefitsx" key
 				lastdigit := string(inst.MappingValue[len(inst.MappingValue)-1])
 				key := fmt.Sprintf("tariff_inclusive_benefit%s", lastdigit)
 				tariffObj.Bullets = writeOptionArr(tariffObj.Bullets, key, cellVal)
@@ -395,7 +390,7 @@ func (svc *mappingService) updateTariff(mi *MappingInstruction, file *excelize.F
 			}
 		}
 
-		// reducing array to minimum length and writing to tariffCRUD
+		// Reduce array to minimum length and write to tariffCRUD
 		lenDiff := 0
 		for i := len(highlightArr) - 1; i >= 0; i-- {
 			if highlightArr[i] != "" {
@@ -406,8 +401,15 @@ func (svc *mappingService) updateTariff(mi *MappingInstruction, file *excelize.F
 		highlightArr = highlightArr[:len(highlightArr)-lenDiff]
 		copy(tariffObj.Highlights, highlightArr)
 
-		// write into db
-		svc.tariffAdapter.Update(lookupObj.Id, tariffObj)
+		// Write into db
+		// svc.tariffAdapter.Update(lookupObj.Id, tariffObj)
+
+		if _, err := svc.tariffAdapter.Update(lookupObj.Id, tariffObj); err != nil {
+			return &Error{
+				ErrTitle: "Tarif Speicherfehler",
+				ErrMsg:   fmt.Sprintf("Update von Tarif %s konnte nicht durchgeführt werden", tariffObj.Id),
+			}
+		}
 	}
 	return nil
 }
@@ -434,8 +436,8 @@ func (svc *mappingService) updateHardware(mi *MappingInstruction, file *excelize
 	for _, listResult := range hardwareLookupList {
 		var hardwareObj *editedCRUDobj
 
-		// check if hardwareCRUD already in editedCRUDmap to prevent unecessary calls to hardwareAdapter
-		// insert into editedCRUDmap if not present
+		// Check if hardwareCRUD already in editedCRUDmap to prevent unecessary calls to hardwareAdapter
+		// Insert into editedCRUDmap if not present
 		if _, ok := editedCRUDmap[listResult.Id]; !ok {
 			readObj, err := svc.hardwareAdapter.Read(listResult.Id)
 			if err != nil {
@@ -503,7 +505,6 @@ func (svc *mappingService) updateHardware(mi *MappingInstruction, file *excelize
 		}
 
 	}
-
 	return nil
 }
 

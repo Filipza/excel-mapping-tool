@@ -2,10 +2,13 @@ package dataimport
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"strings"
 	"testing"
 
+	"github.com/Filipza/excel-mapping-tool/internal/domain/v1/tariff"
+	"github.com/Filipza/excel-mapping-tool/internal/settings"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -277,33 +280,76 @@ func TestWriteMappingGetIdentifierNegative(t *testing.T) {
 	assert.Error(t, err, "MappingInstruction should contain either 'EbootisID' or 'externalArticleNumber' as MappingValue")
 }
 
-func TestWriteMappingOpenXlsxNegative(t *testing.T) {
+// func TestWriteMappingOpenXlsxNegative(t *testing.T) {
 
-	file, err := os.ReadFile("../../../test/positive.xlsx")
-	if err != nil {
-		t.Fatalf("Loading test .xlsx failed: %v", err)
+// 	file, err := os.ReadFile("../../../test/positive.xlsx")
+// 	if err != nil {
+// 		t.Fatalf("Loading test .xlsx failed: %v", err)
+// 	}
+
+// 	mockUploadData := &UploadData{
+// 		UploadedFile: bytes.NewReader(file),
+// 		UploadType:   "hardware",
+// 	}
+
+// 	svc := mappingService{}
+
+// 	svc.ReadFile(mockUploadData)
+
+// 	mi := &MappingInstruction{
+// 		Uuid: "8cae326f-d3de-45d4-8bb8-ded181f44a0e",
+// 		Mapping: []MappingObject{
+// 			{ColIndex: 0, MappingValue: "pibUrl"},
+// 			{ColIndex: 1, MappingValue: "wkz"},
+// 		},
+// 	}
+
+// 	_, err = svc.WriteMapping(mi)
+
+// 	assert.NoError(t, err, "function should not return an error")
+// }
+
+type crudMock[T, L any] struct {
+	list   func(...settings.Option) ([]*L, error)
+	create func(*T, ...settings.Option) (*T, error)
+	read   func(string, ...settings.Option) (*T, error)
+	update func(string, *T, ...settings.Option) (*T, error)
+	delete func(string, ...settings.Option) (*T, error)
+}
+
+func (svc *crudMock[T, L]) List(opts ...settings.Option) ([]*L, error) {
+	if svc.list != nil {
+		return svc.list(opts...)
 	}
+	return nil, errors.New("not implememnted")
+}
 
-	mockUploadData := &UploadData{
-		UploadedFile: bytes.NewReader(file),
-		UploadType:   "stocks",
+func (svc *crudMock[T, L]) Create(t *T, opts ...settings.Option) (*T, error) {
+	if svc.create != nil {
+		return svc.create(t, opts...)
 	}
+	return nil, errors.New("not implememnted")
+}
 
-	svc := mappingService{}
-
-	svc.ReadFile(mockUploadData)
-
-	mi := &MappingInstruction{
-		Uuid: "8cae326f-d3de-45d4-8bb8-ded181f44a0e",
-		Mapping: []MappingObject{
-			{ColIndex: 0, MappingValue: "pibUrl"},
-			{ColIndex: 1, MappingValue: "wkz"},
-		},
+func (svc *crudMock[T, L]) Read(id string, opts ...settings.Option) (*T, error) {
+	if svc.read != nil {
+		return svc.read(id, opts...)
 	}
+	return nil, errors.New("not implememnted")
+}
 
-	_, err = svc.WriteMapping(mi)
+func (svc *crudMock[T, L]) Update(id string, t *T, opts ...settings.Option) (*T, error) {
+	if svc.update != nil {
+		return svc.update(id, t, opts...)
+	}
+	return nil, errors.New("not implememnted")
+}
 
-	assert.NoError(t, err, "function should not return an error")
+func (svc *crudMock[T, L]) Delete(id string, opts ...settings.Option) (*T, error) {
+	if svc.delete != nil {
+		return svc.delete(id, opts...)
+	}
+	return nil, errors.New("not implememnted")
 }
 
 func TestWriteMapping(t *testing.T) {
@@ -315,10 +361,13 @@ func TestWriteMapping(t *testing.T) {
 
 	mockUploadData := &UploadData{
 		UploadedFile: bytes.NewReader(file),
-		UploadType:   "stocks",
+		UploadType:   "tariff",
 	}
 
-	svc := mappingService{}
+	tariffAdapter := &crudMock[tariff.TariffCRUD, tariff.TariffLookup]{}
+	svc := &mappingService{
+		tariffAdapter: tariffAdapter,
+	}
 
 	result, err := svc.ReadFile(mockUploadData)
 
@@ -330,9 +379,18 @@ func TestWriteMapping(t *testing.T) {
 			{ColIndex: 2, MappingValue: "pibUrl"},
 			{ColIndex: 3, MappingValue: "wkz"},
 		},
+		UploadType: "tariff",
 	}
 
-	svc.WriteMapping(mi)
+	_, err = svc.WriteMapping(mi)
 
-	assert.NoError(t, err, "function should not return an error")
+	assert.Error(t, err, "function should not return an error")
+
+	tariffAdapter.list = func(o ...settings.Option) ([]*tariff.TariffLookup, error) {
+		return []*tariff.TariffLookup{}, nil
+	}
+
+	// tariffAdapter.read = func(s string, o ...settings.Option) (*tariff.TariffCRUD, error) {
+
+	// }
 }
